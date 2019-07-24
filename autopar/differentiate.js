@@ -1,12 +1,10 @@
 const { data, number, union, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
-const map = require("@algebraic/ast/map");
 const parse = require("@algebraic/ast/parse");
 const fromBabel = require("@algebraic/ast/from-babel");
 const partition = require("@climb/partition");
 const Node = require("@algebraic/ast/node");
 const { List, Map, Set } = require("@algebraic/collections");
-const StringSet = Set(string);
 const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
 const reachability = require("@climb/dfs-reachability");
@@ -41,27 +39,8 @@ const tδ = ((call, apply) =>
      template((object, property, ds, args) =>
         δ.apply(object, property, ds, args)))
 
-const t_ds = (...args) => args
-    .flatMap((value, index) => value ? [index] : []);
-const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ds) : value;
-
 const tδ_operator = template(name => δ.operators[name]);
 const tδ_branch = template(expression => branch[expression]);
-
-//const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
-
-//const tδ_depend = template((f, ...args) => return δ.depend(false, f, ...args));
-
-const t_thunk = template(expression => () => expression);
-const t_defer = expression =>
-    t.isCallExpression(expression) &&
-    expression.arguments.length === 0 ?
-        expression.callee :
-        t_thunk(expression);
-
-const tδ_success = template(expression => δ.success(expression));
-//const tδ_operator = template(name => δ.operators[name]);
-//const tδ_ternary = tδ_operator("?:");
 
 // at statement level?
 /*module.exports = map(
@@ -79,26 +58,6 @@ const tδ_success = template(expression => δ.success(expression));
         "WithStatement",
         "WhileStatement",
         "SwitchStatement"),
-
-    CallExpression(expression)
-    {
-        const { callee, arguments: args } = expression;
-
-        if (!isIdentifierExpression("parallel", callee) ||
-            args.length !== 1)
-            return expression;
-
-        const firstArgument = args[0];
-
-        if (!is (Node.ArrowFunctionExpression, firstArgument) &&
-            !is (Node.FunctionExpression, firstArgument))
-            return expression;
-
-        if (expression.freeVariables.has("branch"))
-            console.log("YES! --");
-
-        return fromFunction(firstArgument);
-    }
 });*/
 
 const isIdentifierExpression = (name, node) =>
