@@ -1,6 +1,6 @@
 {
   "name": "autopar",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.1",
   "description": "Automatic Concurrency through Asynchronous Derivatives",
   "main": "index.js",
   "scripts": {
