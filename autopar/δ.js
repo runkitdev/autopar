@@ -1,3 +1,4 @@
+const { isArray } = Array;
 const { fNamed } = require("@algebraic/type/declaration");
 const { Task, fromAsync } = require("@cause/task");
 const Dependent = require("@cause/task/dependent");
@@ -8,12 +9,38 @@ const cache = (f, ds, getδf) =>
         JSON.stringify(ds), () =>
             fNamed(`(δ/${ds.map(d => `δ${d}`).join("")})(${f.name})`,
                 getδf(f, ds)));
-const success = value => Task.Success({ value });
 
+const KnownParallelSymbol = Symbol("autopar:known-parallel");
+const isKnownParallel = f => !!f[KnownParallelSymbol];
 
-module.exports.success = success;
+module.exports.success = value => Task.Success({ value });
 module.exports.operators = { };//require("./operators");
-module.exports.depend = require("./depend");
+
+module.exports.parallel = function parallel(f)
+{
+    return Object.assign(f, { [KnownParallelSymbol]: true });
+}
+
+module.exports.isKnownParallel = isKnownParallel;
+
+module.exports.depend = function depend(callee, ...invocations)
+{
+    const lifted = false;
+    const taskCallee = Task.Success({ value: callee });
+    const args = invocations.map(toTask);
+
+    return Dependent.wrap({ lifted, callee: taskCallee, arguments: args });
+}
+
+function toTask([signature, args])
+{
+    const isMember = isArray(signature);
+    const f = isMember ? signature[0][signature[1]] : signature;
+    const fLifted = isKnownParallel(f) ? f : fromAsync(f);
+
+    return isMember ? fLifted.apply(signature[0], args) : fLifted(...args);
+}
+
 
 /*
 module.exports = δ;

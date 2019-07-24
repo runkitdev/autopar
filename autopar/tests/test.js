@@ -5,6 +5,8 @@ const log_and_val = x => (console.log(x), eval(x));
 
 log_and_val(transform(`
 
+const u = async id => (await 0, id);
+
 const x = {
     y: parallel function f(a)
     {
@@ -16,7 +18,7 @@ const x = {
     {
         const y = x.y;
 
-        return branch[x.y](10) + branch[y](10) + branch[x["y"]](10);
+        return branch[u](20) + branch[x.y](10) + branch[y](10) + branch[x["y"]](10);
     }
 };
 

@@ -5,9 +5,13 @@ const insertDeclaration = Symbol("insertDeclaration");
 
 require("./parser-plugin");
 
+const { parseExpression } = require("@babel/parser");
+const toParallel = (callee => fExpression =>
+    ({ type: "CallExpression", callee, arguments:[fExpression] }))
+    (parseExpression("δ.parallel"));
+
 module.exports = function plugin({ types: t })
 {
-    const { parseExpression } = require("@babel/parser");
     const scope =
         (({ left: id, right: init }) => ({ id, init }))
         (parseExpression(`δ = require("autopar/δ")`));
@@ -45,12 +49,13 @@ function FunctionExit(path, { file })
 
         if (functionNode.type === "FunctionDeclaration")
         {
-            const functionExpression = { ...babelNode, type: "FunctionExpression" };
+            const functionExpression =
+                toParallel({ ...babelNode, type: "FunctionExpression" });
 
             path.remove();
             path.scope.push({ id: parallel.id, kind:"let", init: functionExpression });
         }
         else
-            path.replaceWith(babelNode);
+            path.replaceWith(toParallel(babelNode));
     }
 };
