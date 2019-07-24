@@ -346,9 +346,17 @@ function fromCalleePosition(keyPath, statement)
         return false;//fail("wrt[] expressions must be of the form wrt[expression]");
 
     const trueCallee = ancestor.callee.property;
-    const modified = Node.CallExpression({ ...ancestor, callee: trueCallee });
+    const receiver = !is (Node.MemberExpression, trueCallee) ?
+        trueCallee :
+        Node.ArrayExpression({ elements: [trueCallee.object,
+            is (Node.ComputedMemberExpression, trueCallee) ?
+                trueCallee.property :
+                Node.StringLiteral({ value: trueCallee.property.name })] });
 
-    return [-2, modified, ancestor];
+    const invocation = Node.ArrayExpression({ elements:
+        [receiver, Node.ArrayExpression({ elements: ancestor.arguments })] });
+
+    return [-2, invocation, ancestor];
 }
 
 function fromCascadingIfStatements(statements)

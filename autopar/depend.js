@@ -9,7 +9,7 @@ module.exports = function depend(callee, ...invocations)
 {
     const lifted = false;
     const taskCallee = Task.Success({ value: callee });
-    const args = invocations;//invocations.map(toTask);
+    const args = invocations.map(toTask);
 
     return Dependent.wrap({ lifted, callee: taskCallee, arguments: args });
 }
@@ -17,7 +17,7 @@ module.exports = function depend(callee, ...invocations)
 function toTask([signature, args])
 {
     const isMember = isArray(signature);
-    const f = isMember ? signature[0][sigature[1]] : signature;
+    const f = isMember ? signature[0][signature[1]] : signature;
 
     return isMember ? f.apply(signature[0], args) : f(...args);
 }

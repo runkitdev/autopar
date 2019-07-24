@@ -5,6 +5,8 @@ const { tokTypes: tt } = require("@babel/parser");
 
 addBabelParserPlugin(parser, "autopar", superclass => class ParallelParser extends superclass
 {
+    // By making parallel a unary operator, it opens us up to weird newline
+    // insertion bugs. parallel function f() { }() shouldn't parse but does.
     parseStatementContent(...args)
     {
         const statement = super.parseStatementContent(...args);

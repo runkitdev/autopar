@@ -1,11 +1,74 @@
 
 const plugin = require("@autopar/babel-plugin");
 const transform = require("@babel/core").transform;
+const log_and_val = x => (console.log(x), eval(x));
 
-console.log(transform(`
+log_and_val(transform(`
+
+const x = {
+    y: parallel function f(a)
+    {
+        const x = 10 + a;
+    
+        return x;
+    },
+    z: parallel function f()
+    {
+        const y = x.y;
+
+        return branch[x.y](10) + branch[y](10) + branch[x["y"]](10);
+    }
+};
+
+(async function ()
+{
+    console.log(await x.z());
+})();
+`, { plugins: [plugin] }).code);
+
+/*
+log_and_val(transform(`
 
 parallel function f()
 {
+    const x = 10 + 1;
+
+    return x;
+};
+
+(async function ()
+{
+    console.log(await f());
+})();
+`, { plugins: [plugin] }).code);
+
+eval(transform(`
+const Task = require("@cause/task");
+const id = Task.fromAsync(x => new Promise(resolve => setTimeout(() => resolve(x), 1000)));
+
+(async function ()
+{console.log(f());
+    console.log(await f());
+})();
+
+parallel function f()
+{
+    const start = Date.now();
+    const result = branch[id](10) + branch[id](20);
+    const end = result + console.log("TOOK: " + (Date.now() - start));
+
+    return (end, result);
+}
+`, { plugins: [plugin] }).code);
+
+
+console.log(transform(`
+
+if (true ) {
+parallel function f()
+{
+    const r = branch[a.b]();
+
     if (branch[f]())
         return 5;
 
@@ -34,7 +97,7 @@ parallel function testConcurrent()
 
     return result3;
 }
-
+}
 `, { plugins: [plugin] }).code);
 
 /*
