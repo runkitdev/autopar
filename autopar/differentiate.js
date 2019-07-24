@@ -46,7 +46,7 @@ const t_ds = (...args) => args
 const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ds) : value;
 
 const tδ_operator = template(name => δ.operators[name]);
-const tδ_wrt = template(expression => wrt[expression]);
+const tδ_branch = template(expression => branch[expression]);
 
 //const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
 
@@ -94,7 +94,7 @@ const tδ_success = template(expression => δ.success(expression));
             !is (Node.FunctionExpression, firstArgument))
             return expression;
 
-        if (expression.freeVariables.has("wrt"))
+        if (expression.freeVariables.has("branch"))
             console.log("YES! --");
 
         return fromFunction(firstArgument);
@@ -310,7 +310,7 @@ function toDependencyChain(taskPairs, statementPairs, available = DenseIntSet.Em
 var global_num = 0;
 function toTasksAndStatements(statement)
 {
-    const keyPaths = statement.freeVariables.get("wrt", List(KeyPath)());
+    const keyPaths = statement.freeVariables.get("branch", List(KeyPath)());
 
     if (keyPaths.size <= 0)
         return [[], [statement]];
@@ -356,15 +356,15 @@ function fromArgumentPosition(keyPath, statement)
     const [ancestor, remainingKeyPath] =
         KeyPath.getJust(-3, keyPath, statement);
         
-    const isWRT = argument =>
+    const isBranch = argument =>
         is (Node.ComputedMemberExpression, argument) &&
-        isIdentifierExpression("wrt", argument.object);
+        isIdentifierExpression("branch", argument.object);
     const ds = ancestor
         .arguments
-        .flatMap((argument, index) => isWRT(argument) ? [index] : []);
+        .flatMap((argument, index) => isBranch(argument) ? [index] : []);
     const args = ancestor
         .arguments
-        .map(argument => isWRT(argument) ? argument.property : argument);
+        .map(argument => isBranch(argument) ? argument.property : argument);
 
     return [-3, tδ(ancestor.callee, ds, args), ancestor];
 }
@@ -437,7 +437,7 @@ function fromCascadingIfStatements(statements)
     const argument = Node.CallExpression(
     {
         callee: tδ_operator("?:"),
-        arguments: [tδ_wrt(consequentFunction), tδ_wrt(alternateFunction)]
+        arguments: [tδ_branch(consequentFunction), tδ_branch(alternateFunction)]
     });
 
     const returnIf = Node.ReturnStatement({ argument });
