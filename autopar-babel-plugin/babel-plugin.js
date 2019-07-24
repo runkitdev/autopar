@@ -10,7 +10,7 @@ module.exports = function plugin({ types: t })
     const { parseExpression } = require("@babel/parser");
     const scope =
         (({ left: id, right: init }) => ({ id, init }))
-        (parseExpression(`δ = require("@cause/task/δ")`));
+        (parseExpression(`δ = require("autopar/δ")`));
 
     const Program = path => void(path.hub.file[insertDeclaration] = () =>
         (path.scope.push(scope), delete path.hub.file[insertDeclaration]));
@@ -41,6 +41,16 @@ function FunctionExit(path, { file })
         // backwards-compatible with Babel, replaceWith wants to do silly
         // things like *mutate* the node we just handed it. So let's just give
         // it a plain object.
-        path.replaceWith(toBabel(parallel));
+        const babelNode = toBabel(parallel);
+
+        if (functionNode.type === "FunctionDeclaration")
+        {
+            const functionExpression = { ...babelNode, type: "FunctionExpression" };
+
+            path.remove();
+            path.scope.push({ id: parallel.id, kind:"let", init: functionExpression });
+        }
+        else
+            path.replaceWith(babelNode);
     }
 };

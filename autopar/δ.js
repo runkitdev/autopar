@@ -11,21 +11,29 @@ const cache = (f, ds, getδf) =>
 const success = value => Task.Success({ value });
 
 
+module.exports.success = success;
+module.exports.operators = { };//require("./operators");
+module.exports.depend = require("./depend");
+
+/*
 module.exports = δ;
 
-function δ(f, ds)
+function parallelize(f, ds)
 {
     return cache(f, ds, fromStandard);
-}
+};
 
-δ.success = success;
+autopar.success = success;
 
-δ.depend = function (lifted, callee, ...rest)
+autopar.depend = function (lifted, callee, args)
 {
-    return Dependent.wrap({ lifted, callee, arguments: rest });
+    const lifted = false;
+    const calleeTask = success(callee);
+
+    return Dependent.wrap({ lifted, callee, arguments: args });
 }
 
-δ.apply = function (object, property, ds, args)
+autopar.apply = function (object, property, ds, args)
 {
     return δ(object[property], ds).apply(object, args);
 }
@@ -39,6 +47,8 @@ function fromStandard(f, ds, knownSync = false)
         (...args) => success(f(...args)) :
         fromAsync((...args) => Promise.resolve(f(...args)));
 }
+
+const oprators = 
 
 const operators = Object.fromEntries(Object.entries(
 {
@@ -131,7 +141,7 @@ const { List, Set, OrderedSet, Seq, Stack } = require("@algebraic/collections");
     .map(([type, prototype]) => δmap(prototype.map, type(Object)));
 
 δ.operators = operators;
-
+*/
 /*
 console.log(δ(operators["?:"], [1])+"");
 console.log(δ(operators["?:"], [1]));
