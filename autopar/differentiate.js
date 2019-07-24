@@ -439,7 +439,7 @@ function fromCascadingIfStatements(statements)
         callee: tδ_operator("?:"),
         arguments: [tδ_wrt(consequentFunction), tδ_wrt(alternateFunction)]
     });
-    console.log(require("@babel/generator").default(argument).code);
+
     const returnIf = Node.ReturnStatement({ argument });
 
     // Construct the revised statement list:
