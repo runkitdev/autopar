@@ -233,12 +233,16 @@ const DependencyChain = union `DependencyChain` (
     data `End` (
         statements  => Array ),
     data `Parent` (
-        tasks       => Array,
-        statements  => Array,
+        tasks       => [Array, []],
+        statements  => [Array, []],
         next        => DependencyChain ) );
 
-function toDependencyChain(taskPairs, statementPairs, available = DenseIntSet.Empty)
+function toDependencyChain(taskPairs, statementPairs, available)
 {
+    if (!available)
+        return DependencyChain.Parent({ next:
+            toDependencyChain(taskPairs, statementPairs, DenseIntSet.Empty) });
+
     if (taskPairs.length === 0)
         return DependencyChain.End({ statements:
             statementPairs.map(([node]) => node) });
