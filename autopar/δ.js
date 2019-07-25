@@ -1,7 +1,12 @@
-const Task = require("@cause/task");
-const { parallelize, precomputed } = require("./parallelize");
+const { isArray, from: ArrayFrom } = Array;
 
-module.exports.success = value => Task.Success({ value });
+const Task = require("@cause/task");
+const Dependent = require("@cause/task/dependent");
+
+const { parallelize, operator, precomputed } = require("./parallelize");
+const success = value => Task.Success({ value });
+
+module.exports.success = success;
 
 module.exports.parallel = function parallel(f)
 {
@@ -10,17 +15,13 @@ module.exports.parallel = function parallel(f)
 
 module.exports.depend = (function ()
 {
-    const { isArray } = Array;
-    const Dependent = require("@cause/task/dependent");
-    const toTask = function ([invocation, args])
+    const toTask = function toTask ([invocation, args])
     {
         const isMemberCall = isArray(invocation);
-        const self = isMemberCall ? invocation[0] : global;
-        const f = isMemberCall ? self[invocation[1]] : invocation;
+        const thisArg = isMemberCall ? invocation[0] : void(0);
+        const f = isMemberCall ? thisArg[invocation[1]] : invocation;
 
-        return  Task.isTaskReturning(f) ?
-                f.apply(self, args) :(console.log("heree..."),
-                Task.fromResolvedCall(self, f, args));
+        return taskApply(f, thisArg, args);
     }
 
     return function depend(callee, ...invocations)
@@ -32,11 +33,18 @@ module.exports.depend = (function ()
     }
 })();
 
+function taskApply(f, thisArg, args)
+{
+    return  Task.isTaskReturning(f) ?
+            f.apply(thisArg, args) :
+            Task.fromResolvedCall(thisArg, f, args);
+}
+
 module.exports.apply = parallelize.apply;
 
 module.exports.operators =
 {
-    ternary: precomputed `ternary` (
+    ternary: operator `ternary` (
         (test, consequent, alternate) =>
             test ? consequent() : alternate(),
 
@@ -49,6 +57,25 @@ module.exports.operators =
         (test, branchingConsequent, branchingAlternate) =>
             test ? branchingConsequent() : branchingAlternate() )
 }
+
+precomputed (Array.prototype.map, [0], function (f, thisArg)
+{
+    // f.apply(null || undefined) just uses the default this, so don't bother
+    // with the indrection in that case.
+    const fApplied = (...args) => taskApply(f, thisArg, args);
+
+    // We use Array.from (instead of `this.map`) in case `this` is some weird
+    // subclass. In that case, `this.map` would also be that subclass and
+    // `depend()` expects an array.
+    const tasks = ArrayFrom(this, fApplied);
+
+    // Dependent will call us with the resolved tasks, so now do a "mock" map
+    // to return the those elements.
+    const callee = success((...args) =>
+        success(this.map((_, index) => args[index])));
+
+    return Dependent.fromCall({ callee, arguments: tasks });
+});
 
 console.log(module.exports.operators.ternary);
 

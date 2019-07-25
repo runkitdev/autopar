@@ -126,11 +126,13 @@ function fromFunction(functionNode)
 
 function toFunctionBody(taskChain)
 {
+    const statements = taskChain.statements
+        .map(statement =>
+            is (Node.ReturnStatement, statement) ?
+                t_successReturn(statement) : statement);
+
     if (is (DependencyChain.End, taskChain))
-        return Node.BlockStatement({ body:
-            taskChain.statements.map(statement =>
-                is (Node.ReturnStatement, statement) ?
-                    t_successReturn(statement) : statement) });
+        return Node.BlockStatement({ body: statements });
 
     const { tasks } = taskChain;
     const thenFunction = Node.FunctionExpression(
@@ -145,7 +147,7 @@ function toFunctionBody(taskChain)
         arguments: [thenFunction, ...tasks.map(task => task.expression)]
     });
     const returnStatement = Node.ReturnStatement({ argument: dependStatement });
-    const body = [...taskChain.statements, returnStatement];
+    const body = [...statements, returnStatement];
 
     return Node.BlockStatement({ body });
 }
@@ -364,7 +366,7 @@ function fromBranch(keyPath, statement)
             is (Node.ComputedMemberExpression, trueCallee) ?
                 trueCallee.property :
                 Node.StringLiteral({ value: trueCallee.property.name }));
-console.log(require("@babel/generator").default(trueCall).code);
+//console.log(require("@babel/generator").default(trueCall).code);
     const invocation =
         toArrayExpression(receiver, toArrayExpression(...trueCall.arguments));
 

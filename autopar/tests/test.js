@@ -14,12 +14,13 @@ const x = {
     },
     y: parallel function f(a)
     {
-        if (a > 1)
+        if (a < 1)
             return 5;
 
         const x = 10 + a;
+        const y = [1,2,3].map(branching u);
     
-        return x;
+        return x + y[0];
     },
     z: parallel function f()
     {

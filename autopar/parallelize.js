@@ -26,37 +26,48 @@ module.exports.parallelize = parallelize;
 
 module.exports.apply = Task.taskReturning((object, property, bs, args) =>
 {
-    try {
-    const r = parallelize(object[property], bs).apply(object, args);
-    //console.log("APPLY RETURNED " + r + (Error().stack));
-    return r;
-} catch (e) { console.log(e) }
+    return parallelize(object[property], bs).apply(object, args);
 })
 
-module.exports.precomputed = (function ()
+function precomputed(f, bs, bf)
+{
+    const cache =
+        f[CacheSymbol] ||
+        (f[CacheSymbol] = Object.create(null));
+    const entry = []
+    const key = toCacheKey(bs);
+
+    return cache[key] || (cache[key] = wrapped(f.name, bs, bf));
+}
+
+module.exports.precomputed = precomputed;
+
+function wrapped(name, bs, bf)
+{
+    const bname = `[∂branching/${bs.map(b => `∂${b}`).join("")}](${name})`;
+
+    return Task.taskReturning(fNamed(bname, function (...args)
+    {
+        return bf.apply(this, args);
+    }));
+}
+
+module.exports.operator = (function ()
 {
     const fNameRegExp = /^\(([^\)]*)\)/;
-    const bs = f => fNameRegExp
+    const findBs = f => fNameRegExp
         .exec(f + "")[1]
         .split(/\s*,\s*/)
         .flatMap((name, index) =>
             name.startsWith("branching") ? [index] : []);
-    const { assign, fromEntries } = Object;
 
-    return ([name]) =>
-        (f, ...precached) => assign(
-            fNamed(name, f), 
-            fromEntries([[CacheSymbol,
-                fromEntries(precached.map(bf =>
-                    toCacheEntry(f, bs(bf), bf)))]]));
+    return ([name]) => function (f, ...bfs)
+    {
+        const named = fNamed(name, f);
+
+        for (bf of bfs)
+            (bs => precomputed(named, bs, bf))(findBs(bf));
+
+        return named;
+    }
 })();
-
-function toCacheEntry(f, bs, bf)
-{
-    const name = `[∂branching/${bs.map(b => `∂${b}`).join("")}](${f.name})`;
-
-    return [toCacheKey(bs), Task.taskReturning(fNamed(name, function (...args)
-    {console.log(f+"");
-        return f.apply(this, args);
-    }))];
-}
