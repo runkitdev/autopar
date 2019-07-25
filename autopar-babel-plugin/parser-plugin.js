@@ -1,6 +1,7 @@
 const parser = require("@babel/parser");
 const addBabelParserPlugin = require("./add-babel-parser-plugin");
 const { tokTypes: tt } = require("@babel/parser");
+const t = require("@babel/types");
 
 
 addBabelParserPlugin(parser, "autopar", superclass => class ParallelParser extends superclass
@@ -26,10 +27,38 @@ addBabelParserPlugin(parser, "autopar", superclass => class ParallelParser exten
         return { ...expression, type: "FunctionDeclaration" };
     }
 
-    parseMaybeUnary(refShorthandDefaultPos, ...rest)
+    parseBranchExpression(...args)
     {
+        this.next();
+
+        const argument = this.parseMaybeUnary(...args);
+
+        if (argument.type !== "CallExpression")
+            this.raise(this.state.start,
+                `Can only branch on a function call.`);
+
+        return t.CallExpression(t.Identifier("branch"), [argument]);
+    }
+
+    parseBranchingExpression(...args)
+    {
+        this.next();
+
+        const argument = this.parseMaybeUnary(...args);
+
+        return t.CallExpression(t.Identifier("branching"), [argument]);
+    }
+
+    parseMaybeUnary(...args)
+    {
+        if (this.isContextual("branch"))
+            return this.parseBranchExpression(...args);
+
+        if (this.isContextual("branching"))
+            return this.parseBranchingExpression(...args);
+
         if (!this.isContextual("parallel"))
-            return super.parseMaybeUnary(refShorthandDefaultPos);
+            return super.parseMaybeUnary(...args);
 
         this.next();
 
@@ -40,12 +69,12 @@ addBabelParserPlugin(parser, "autopar", superclass => class ParallelParser exten
 
         return Object.assign(argument, { parallel: true });
     }
-    
+
     checkReservedWord(word, startLoc, ...rest)
     {
         if (word === "parallel")
             this.raise(startLoc, `Unexpected keyword '${word}'`);
 
         return super.checkReservedWord(word, startLoc, ...rest);
-    }    
+    }
 });

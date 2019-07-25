@@ -280,11 +280,13 @@ function toTasksAndStatements(statement)
 
     const keyPath = keyPaths.reduce((longest, keyPath) =>
         longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
-    const inCalleePosition = KeyPath.at(keyPath, -2) === "callee";
+    //const inCalleePosition = KeyPath.at(keyPath, -2) === "callee";
 
-    const [insertionPoint, newChild, ancestor] = inCalleePosition ?
+    const [insertionPoint, newChild, ancestor] = fromBranch(keyPath, statement);
+
+    /*inCalleePosition ?
         fromCalleePosition(keyPath, statement) :
-        fromArgumentPosition(keyPath, statement);
+        fromArgumentPosition(keyPath, statement);*/
     
 //        fail("wrt[] can only appear in function calls.");
 
@@ -335,6 +337,26 @@ function fromArgumentPosition(keyPath, statement)
 function toArrayExpression(...elements)
 {
     return Node.ArrayExpression({ elements });
+}
+
+function fromBranch(keyPath, statement)
+{
+    const [ancestor, remainingKeyPath] = KeyPath.getJust(-1, keyPath, statement);
+
+    const trueCall = ancestor.arguments[0];
+    const trueCallee = trueCall.callee;
+    const receiver = !is (Node.MemberExpression, trueCallee) ?
+        trueCallee :
+        toArrayExpression(
+            trueCallee.object,
+            is (Node.ComputedMemberExpression, trueCallee) ?
+                trueCallee.property :
+                Node.StringLiteral({ value: trueCallee.property.name }));
+
+    const invocation =
+        toArrayExpression(receiver, toArrayExpression(...trueCall.arguments));
+
+    return [-1, invocation, ancestor];
 }
 
 function fromCalleePosition(keyPath, statement)

@@ -8,10 +8,7 @@ log_and_val(transform(`
 const u = async id => (await 0, id);
 
 const x = {
-    a: parallel function f(a)
-    {
-        return branch[f](branch[d], branch[e]);
-    },
+
     y: parallel function f(a)
     {
         const x = 10 + a;
@@ -22,7 +19,7 @@ const x = {
     {
         const y = x.y;
 
-        return branch[u](20) + branch[x.y](10) + branch[y](10) + branch[x["y"]](10);
+        return branch u(20) + branch x.y(10) + branch y(10) + branch x["y"](10);
     }
 };
 
@@ -31,7 +28,12 @@ const x = {
     console.log(await x.z());
 })();
 `, { plugins: [plugin] }).code);
-
+/*
+    a: parallel function f(a)
+    {
+        return branch f(branching d, branching e);
+    },
+*/
 /*
 log_and_val(transform(`
 
