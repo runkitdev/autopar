@@ -332,6 +332,11 @@ function fromArgumentPosition(keyPath, statement)
     return [-3, tδ(ancestor.callee, ds, args), ancestor];
 }
 
+function toArrayExpression(...elements)
+{
+    return Node.ArrayExpression({ elements });
+}
+
 function fromCalleePosition(keyPath, statement)
 {    
     const [ancestor, remainingKeyPath] = KeyPath.getJust(-2, keyPath, statement);
@@ -348,13 +353,14 @@ function fromCalleePosition(keyPath, statement)
     const trueCallee = ancestor.callee.property;
     const receiver = !is (Node.MemberExpression, trueCallee) ?
         trueCallee :
-        Node.ArrayExpression({ elements: [trueCallee.object,
+        toArrayExpression(
+            trueCallee.object,
             is (Node.ComputedMemberExpression, trueCallee) ?
                 trueCallee.property :
-                Node.StringLiteral({ value: trueCallee.property.name })] });
+                Node.StringLiteral({ value: trueCallee.property.name }));
 
-    const invocation = Node.ArrayExpression({ elements:
-        [receiver, Node.ArrayExpression({ elements: ancestor.arguments })] });
+    const invocation =
+        toArrayExpression(receiver, toArrayExpression(...ancestor.arguments));
 
     return [-2, invocation, ancestor];
 }
