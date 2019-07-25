@@ -40,7 +40,8 @@ const tδ = ((call, apply) =>
         δ.apply(object, property, ds, args)))
 
 const tδ_operator = template(name => δ.operators[name]);
-const tδ_branch = template(expression => branch[expression]);
+const tδ_branch = template(expression => branch(expression));
+const tδ_branching = template(expression => branching(expression));
 
 // at statement level?
 /*module.exports = map(
@@ -108,7 +109,7 @@ function fromFunction(functionNode)
         removeEmptyStatements,
         separateVariableDeclarations,
         fromCascadingIfStatements)(body.body);
-        
+
     const [tasks, statements] = normalizedStatements
         .map(toTasksAndStatements)
         .reduce((accum, [tasks, statements]) =>
@@ -273,21 +274,32 @@ function toDependencyChain(taskPairs, statementPairs, available)
 var global_num = 0;
 function toTasksAndStatements(statement)
 {
-    const keyPaths = statement.freeVariables.get("branch", List(KeyPath)());
+    const branchKeyPaths =
+        statement.freeVariables.get("branch", List(KeyPath)());
+    const branchingKeyPaths =
+        statement.freeVariables.get("branching", List(KeyPath)());
 
-    if (keyPaths.size <= 0)
+    if (branchKeyPaths.size <= 0 && branchingKeyPaths.size <= 0)
         return [[], [statement]];
 
-    const keyPath = keyPaths.reduce((longest, keyPath) =>
-        longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
-    //const inCalleePosition = KeyPath.at(keyPath, -2) === "callee";
 
-    const [insertionPoint, newChild, ancestor] = fromBranch(keyPath, statement);
+    const firstBranchKeyPath = branchKeyPaths.reduce((longest, keyPath) =>
+        longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
+    const firstBranchingKeyPath = branchingKeyPaths.reduce((longest, keyPath) =>
+        longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
+
+    // This is the worst way to do this...
+    const branchIsLonger =
+        firstBranchKeyPath.length > firstBranchingKeyPath.length;
+    const keyPath = branchIsLonger ? firstBranchKeyPath : firstBranchingKeyPath;
+    const [insertionPoint, newChild, ancestor] = branchIsLonger ?
+        fromBranch(keyPath, statement) :
+        fromBranching(keyPath, statement);
 
     /*inCalleePosition ?
         fromCalleePosition(keyPath, statement) :
         fromArgumentPosition(keyPath, statement);*/
-    
+
 //        fail("wrt[] can only appear in function calls.");
 
     if (is (Node.BlockVariableDeclaration, statement))
@@ -313,14 +325,14 @@ const until = function (predicate, transform, start)
     if (predicate(start))
         return start;
 
-    return until(predicate, transform, transform(start));    
+    return until(predicate, transform, transform(start));
 }
 
 function fromArgumentPosition(keyPath, statement)
 {
     const [ancestor, remainingKeyPath] =
         KeyPath.getJust(-3, keyPath, statement);
-        
+
     const isBranch = argument =>
         is (Node.ComputedMemberExpression, argument) &&
         isIdentifierExpression("branch", argument.object);
@@ -352,39 +364,33 @@ function fromBranch(keyPath, statement)
             is (Node.ComputedMemberExpression, trueCallee) ?
                 trueCallee.property :
                 Node.StringLiteral({ value: trueCallee.property.name }));
-
+console.log(require("@babel/generator").default(trueCall).code);
     const invocation =
         toArrayExpression(receiver, toArrayExpression(...trueCall.arguments));
 
     return [-1, invocation, ancestor];
 }
 
-function fromCalleePosition(keyPath, statement)
-{    
-    const [ancestor, remainingKeyPath] = KeyPath.getJust(-2, keyPath, statement);
+function fromBranching(keyPath, statement)
+{
+    const [ancestor, remainingKeyPath] =
+        KeyPath.getJust(-3, keyPath, statement);
 
-    if (!is (Node.CallExpression, ancestor)  ||
-        remainingKeyPath.length !== 2 ||
-        remainingKeyPath.key !== "callee" ||
-        remainingKeyPath.child.key !== "object")
-        return false;//fail("wrt[] can only appear in function calls.");
+    const isBranching = argument =>
+        is (Node.CallExpression, argument) &&
+        isIdentifierExpression("branching", argument.callee);
+    const ds = ancestor
+        .arguments
+        .flatMap((argument, index) => isBranching(argument) ? [index] : []);
+    const args = ancestor
+        .arguments
+        .map(argument => isBranching(argument) ? argument.arguments[0] : argument);
 
-    if (!is (Node.ComputedMemberExpression, ancestor.callee))
-        return false;//fail("wrt[] expressions must be of the form wrt[expression]");
+    const autoBranch = tδ_branch(tδ(ancestor.callee, ds, args));
+    const autoBranchKeyPath = autoBranch.freeVariables.get("branch").get(0);
+    const [, autoDeBranched] = fromBranch(autoBranchKeyPath, autoBranch);
 
-    const trueCallee = ancestor.callee.property;
-    const receiver = !is (Node.MemberExpression, trueCallee) ?
-        trueCallee :
-        toArrayExpression(
-            trueCallee.object,
-            is (Node.ComputedMemberExpression, trueCallee) ?
-                trueCallee.property :
-                Node.StringLiteral({ value: trueCallee.property.name }));
-
-    const invocation =
-        toArrayExpression(receiver, toArrayExpression(...ancestor.arguments));
-
-    return [-2, invocation, ancestor];
+    return [-3, autoDeBranched, ancestor];
 }
 
 function fromCascadingIfStatements(statements)
@@ -438,8 +444,8 @@ function fromCascadingIfStatements(statements)
         // Should branch?...
         callee: tδ_operator("ternary"),
         arguments: [test,
-            tδ_branch(consequentFunction),
-            tδ_branch(alternateFunction)]
+            tδ_branching(consequentFunction),
+            tδ_branching(alternateFunction)]
     });
 
     const returnIf = Node.ReturnStatement({ argument });

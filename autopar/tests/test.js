@@ -8,9 +8,15 @@ log_and_val(transform(`
 const u = async id => (await 0, id);
 
 const x = {
-
+    a: parallel function f(a)
+    {
+        return f(branching d, branching e);
+    },
     y: parallel function f(a)
     {
+        if (a > 1)
+            return 5;
+
         const x = 10 + a;
     
         return x;
@@ -28,12 +34,7 @@ const x = {
     console.log(await x.z());
 })();
 `, { plugins: [plugin] }).code);
-/*
-    a: parallel function f(a)
-    {
-        return branch f(branching d, branching e);
-    },
-*/
+
 /*
 log_and_val(transform(`
 
