@@ -413,12 +413,16 @@ function fromCascadingIfStatements(statements)
 
     const argument = Node.CallExpression(
     {
-        callee: tδ_operator("?:"),
-        arguments: [tδ_branch(consequentFunction), tδ_branch(alternateFunction)]
+        // Should branch?...
+        callee: tδ_operator("ternary"),
+        arguments: [test,
+            tδ_branch(consequentFunction),
+            tδ_branch(alternateFunction)]
     });
 
     const returnIf = Node.ReturnStatement({ argument });
 
+    // console.log(require("@babel/generator").default(returnIf).code);
     // Construct the revised statement list:
     return [...statements.slice(0, firstIf), returnIf];
 }
