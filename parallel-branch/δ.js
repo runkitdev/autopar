@@ -77,8 +77,6 @@ precomputed (Array.prototype.map, [0], function (f, thisArg)
     return Dependent.fromCall({ callee, arguments: tasks });
 });
 
-console.log(module.exports.operators.ternary);
-
 /*
 
  (
