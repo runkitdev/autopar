@@ -1,41 +1,95 @@
-const { fNamed } = require("@algebraic/type/declaration");
-const { isArray } = Array;
-const { Task, fromAsync } = require("@cause/task");
-const Dependent = require("@cause/task/dependent");
-const CachedDeltas = Symbol("δs");
-const get = (object, key, make) => object[key] || (object[key] = make());
-const cache = (f, ds, getδf) =>
-    get(get(f, CachedDeltas, () => Object.create(null)),
-        JSON.stringify(ds), () =>
-            fNamed(`(δ/${ds.map(d => `δ${d}`).join("")})(${f.name})`,
-                getδf(f, ds)));
+const Task = require("@cause/task");
+const { parallelize, precomputed } = require("./parallelize");
 
 module.exports.success = value => Task.Success({ value });
-module.exports.operators = { };//require("./operators");
 
 module.exports.parallel = function parallel(f)
 {
     return Task.taskReturning(f);
 }
 
-module.exports.depend = function depend(callee, ...invocations)
+module.exports.depend = (function ()
 {
-    const taskCallee = Task.Success({ value: callee });
-    const args = invocations.map(toTask);
+    const { isArray } = Array;
+    const Dependent = require("@cause/task/dependent");
+    const toTask = function ([invocation, args])
+    {
+        const isMemberCall = isArray(invocation);
+        const self = isMemberCall ? invocation[0] : global;
+        const f = isMemberCall ? self[invocation[1]] : invocation;
 
-    return Dependent.fromCall({ callee: taskCallee, arguments: args });
+        return  Task.isTaskReturning(f) ?
+                f.apply(self, args) :(console.log("heree..."),
+                Task.fromResolvedCall(self, f, args));
+    }
+
+    return function depend(callee, ...invocations)
+    {
+        const taskCallee = Task.Success({ value: callee });
+        const args = invocations.map(toTask);
+
+        return Dependent.fromCall({ callee: taskCallee, arguments: args });
+    }
+})();
+
+module.exports.apply = parallelize.apply;
+
+module.exports.operators =
+{
+    ternary: precomputed `ternary` (
+        (test, consequent, alternate) =>
+            test ? consequent() : alternate(),
+
+        (test, branchingConsequent, alternate) =>
+            test ? branchingConsequent() : success(alternate()),
+
+        (test, consequent, branchingAlternate) =>
+            test ? success(consequent()) : branchingAlternate(),
+
+        (test, branchingConsequent, branchingAlternate) =>
+            test ? branchingConsequent() : branchingAlternate() )
 }
 
-function toTask([invocation, args])
-{
-    const isMemberCall = isArray(invocation);
-    const self = isMemberCall ? invocation[0] : global;
-    const f = isMemberCall ? self[invocation[1]] : invocation;
+console.log(module.exports.operators.ternary);
 
-    return  Task.isTaskReturning(f) ?
-            f.apply(self, args) :
-            Task.fromResolvedCall(self, f, args);
+/*
+
+ (
+    ([1,2]) =>
+    )
+
+
+(t, c, a) => t ? c() : a();
+
+module.exports.operators =
+{
+    ...operator `?:` (
+
+        ((test, consequent, alternate) =>
+            test ? consequent() : alternate()),
+        [[1], (test, δconsequent, alternate) =>
+            test ? δconsequent() : success(alternate())],
+        [[2], (test, consequent, δalternate) =>
+            test ? success(consequent()) : δalternate()],
+        [[1,2], (test, δconsequent, δalternate) =>
+            test ? δconsequent() : δalternate()])
 }
+
+console.log(module.exports.operators["?:"]);
+
+function operator([name])
+{
+    return function (f, ...precached)
+    {
+        const operator = fNamed(name, f);
+
+        precached.map(([ds, df]) => cache(operator, ds, () => df));
+
+        return { [name]: operator };
+    }
+}
+
+
 
 
 /*
@@ -71,7 +125,7 @@ function fromStandard(f, ds, knownSync = false)
         fromAsync((...args) => Promise.resolve(f(...args)));
 }
 
-const oprators = 
+const oprators =
 
 const operators = Object.fromEntries(Object.entries(
 {

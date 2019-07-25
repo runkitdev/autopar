@@ -8,6 +8,10 @@ log_and_val(transform(`
 const u = async id => (await 0, id);
 
 const x = {
+    a: parallel function f(a)
+    {
+        return branch[f](branch[d], branch[e]);
+    },
     y: parallel function f(a)
     {
         const x = 10 + a;
