@@ -1,7 +1,11 @@
-const parser = require("@babel/parser");
+// We want whatever parser @babel/core is using.
+const { dirname } = require("path");
+const corePath = require.resolve("@babel/core");
+const babelRequire = require("module").createRequireFromPath(corePath);
+const parser = babelRequire("@babel/parser");
+const t = babelRequire("@babel/types");
+
 const addBabelParserPlugin = require("./add-babel-parser-plugin");
-const { tokTypes: tt } = require("@babel/parser");
-const t = require("@babel/types");
 
 
 addBabelParserPlugin(parser, "parallel-branch", superclass => class ParallelParser extends superclass

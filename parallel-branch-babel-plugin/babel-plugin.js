@@ -12,8 +12,10 @@ const toParallel = (callee => fExpression =>
 
 module.exports = function plugin({ types: t })
 {
+    // This has to be let in order for it to take place before all the function
+    // declarations.
     const scope =
-        (({ left: id, right: init }) => ({ id, init }))
+        (({ left: id, right: init }) => ({ kind:"let", id, init }))
         (parseExpression(`δ = require("parallel-branch/δ")`));
 
     const Program = path => void(path.hub.file[insertDeclaration] = () =>
