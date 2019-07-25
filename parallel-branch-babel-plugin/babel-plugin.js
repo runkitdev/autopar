@@ -1,4 +1,4 @@
-const differentiate = require("autopar/differentiate");
+const differentiate = require("parallel-branch/differentiate");
 const fromBabel = require("@algebraic/ast/from-babel");
 const toBabel = require("@algebraic/ast/to-babel");
 const insertDeclaration = Symbol("insertDeclaration");
@@ -14,7 +14,7 @@ module.exports = function plugin({ types: t })
 {
     const scope =
         (({ left: id, right: init }) => ({ id, init }))
-        (parseExpression(`δ = require("autopar/δ")`));
+        (parseExpression(`δ = require("parallel-branch/δ")`));
 
     const Program = path => void(path.hub.file[insertDeclaration] = () =>
         (path.scope.push(scope), delete path.hub.file[insertDeclaration]));
@@ -23,7 +23,7 @@ module.exports = function plugin({ types: t })
                 name: "@cause/task/transform",
 
                 manipulateOptions: (opts, parserOpts) =>
-                    parserOpts.plugins.push("autopar"),
+                    parserOpts.plugins.push("parallel-branch"),
 
                 visitor: { Program, Function: { exit: FunctionExit } }
             };

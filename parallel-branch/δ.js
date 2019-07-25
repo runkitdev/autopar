@@ -127,9 +127,9 @@ function parallelize(f, ds)
     return cache(f, ds, fromStandard);
 };
 
-autopar.success = success;
+parallel.success = success;
 
-autopar.depend = function (lifted, callee, args)
+parallel.depend = function (lifted, callee, args)
 {
     const lifted = false;
     const calleeTask = success(callee);
@@ -137,7 +137,7 @@ autopar.depend = function (lifted, callee, args)
     return Dependent.wrap({ lifted, callee, arguments: args });
 }
 
-autopar.apply = function (object, property, ds, args)
+parallel.apply = function (object, property, ds, args)
 {
     return δ(object[property], ds).apply(object, args);
 }

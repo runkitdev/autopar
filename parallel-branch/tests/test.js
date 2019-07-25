@@ -1,5 +1,5 @@
 
-const plugin = require("@autopar/babel-plugin");
+const plugin = require("@parallel-branch/babel-plugin");
 const transform = require("@babel/core").transform;
 const log_and_val = x => (console.log(x), eval(x));
 
@@ -114,10 +114,10 @@ parallel function testConcurrent()
 
 const generate = node => require("@babel/generator").default(node).code
 const parse = require("@algebraic/ast/parse").expression;
-const autobranch = require("autopar/differentiate");
+const autobranch = require("parallel-branch/differentiate");
 
 //const node = require("./map-conc")(parse( WRAP+""));
-const node = autopar(parse((() => parallel(() =>
+const node = autobranch(parse((() => parallel(() =>
 {
     if (branch[f]())
         return 5;

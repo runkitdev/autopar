@@ -1,8 +1,8 @@
 {
-  "name": "@autopar/babel-plugin",
-  "version": "1.0.0",
-  "description": "",
-  "main": "./babel-plugin.js",
+  "name": "parallel-branch",
+  "version": "1.0.0-alpha.1",
+  "description": "Automatic Concurrency through Asynchronous Derivatives",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
