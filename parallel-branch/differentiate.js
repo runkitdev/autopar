@@ -366,7 +366,8 @@ function fromBranch(keyPath, statement)
             is (Node.ComputedMemberExpression, trueCallee) ?
                 trueCallee.property :
                 Node.StringLiteral({ value: trueCallee.property.name }));
-//console.log(require("@babel/generator").default(trueCall).code);
+//console.log(require("@babel/generator").default(ancestor).code);
+//console.log(trueCall.arguments);
     const invocation =
         toArrayExpression(receiver, toArrayExpression(...trueCall.arguments));
 

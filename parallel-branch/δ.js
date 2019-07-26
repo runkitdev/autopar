@@ -29,7 +29,7 @@ module.exports.depend = (function ()
         const taskCallee = Task.Success({ value: callee });
         const args = invocations.map(toTask);
 
-        return Dependent.fromCall({ callee: taskCallee, arguments: args });
+        return Dependent.fromCall({ callee: taskCallee, args });
     }
 })();
 
@@ -74,7 +74,7 @@ precomputed (Array.prototype.map, [0], function (f, thisArg)
     const callee = success((...args) =>
         success(this.map((_, index) => args[index])));
 
-    return Dependent.fromCall({ callee, arguments: tasks });
+    return Dependent.fromCall({ callee, args: tasks });
 });
 
 /*

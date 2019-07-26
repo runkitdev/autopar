@@ -1,39 +1,74 @@
-const parser = require("@babel/parser");
+const partition = require("@climb/partition");
+const swapped = new Set();
+const factories = Object.create(null);
+const classes = Object.create(null);
+const getClass = object => Object.getPrototypeOf(object).constructor;
+const { hasOwnProperty } = Object;
 
-module.exports = function addParserPlugin(parser, name, toClass)
+
+module.exports = function addParserPlugin(parse, name, toClass)
 {
-    swizzleOnce(Array.prototype, "filter", function (...args)
+    factories[name] = toClass;
+
+    if (swapped.has(parse))
+        return;
+
+    try
     {
-        this.push(name);
-        const filtered = this.filter(...args);
-
-        swizzleOnce(Object.prototype, name, function (superclass)
+        Object.defineProperty(Object.prototype, "options",
         {
-            this[name] = toClass;
+            configurable: true,
+            set(options)
+            {
+                const Parser = getClass(this);
+                const Superclass = getClass(Parser.prototype);
 
-            return this[name](superclass);
+                Object.setPrototypeOf(Parser,
+                    class WireTap extends Superclass
+                    {
+                        constructor(...args)
+                        {
+                            super(...args);
+
+                            return fixParserClass(
+                                this,
+                                Parser.constructor,
+                                args);
+                        }
+                    });
+            }
         });
 
-        return filtered;
-    });
+        parse("");
+    }
+    catch (e) { }
 
-    parser.parse("", { plugins:["estree", name] });
+    delete Object.prototype.options;
+
+    swapped.add(parse);
+
+    parse("5+5");
 }
 
-function swizzleOnce(object, name, f)
+function fixParserClass(thisArg, constructor, args)
 {
-    const existing = Object.getOwnPropertyDescriptor(object, name);
+    const [options] = args;
+    const [standard, custom] = partition(name =>
+        !hasOwnProperty.call(factories, name),
+        options.plugins);
 
-    Object.defineProperty(object, name,
-    {
-        configurable: true,
-        get()
-        {
-            if (existing)
-                Object.defineProperty(object, name, existing);
-            else
-                delete object[name];
-            return f;
-        }
-    });
+    if (custom.length <= 0)
+        return thisArg;
+
+    const key = [...standard, ...custom].join("/");
+    const subclass =
+        classes[key] ||
+        (classes[key] = custom.reduce(
+            (superclass, key) => factories[key](superclass),
+            getClass(thisArg)));
+
+    Object.setPrototypeOf(thisArg, subclass.prototype);
+
+    return thisArg;
 }
+

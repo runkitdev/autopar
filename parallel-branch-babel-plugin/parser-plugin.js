@@ -8,7 +8,8 @@ const t = babelRequire("@babel/types");
 const addBabelParserPlugin = require("./add-babel-parser-plugin");
 
 
-addBabelParserPlugin(parser, "parallel-branch", superclass => class ParallelParser extends superclass
+module.exports = function (parse) {
+addBabelParserPlugin(parse, "parallel-branch", superclass => class ParallelParser extends superclass
 {
     // By making parallel a unary operator, it opens us up to weird newline
     // insertion bugs. parallel function f() { }() shouldn't parse but does.
@@ -76,9 +77,9 @@ addBabelParserPlugin(parser, "parallel-branch", superclass => class ParallelPars
 
     checkReservedWord(word, startLoc, ...rest)
     {
-        if (word === "parallel")
-            this.raise(startLoc, `Unexpected keyword '${word}'`);
+//        if (word === "parallel")
+//            this.raise(startLoc, `Unexpected keyword '${word}'`);
 
         return super.checkReservedWord(word, startLoc, ...rest);
     }
-});
+}); }

@@ -3,15 +3,17 @@ const fromBabel = require("@algebraic/ast/from-babel");
 const toBabel = require("@algebraic/ast/to-babel");
 const insertDeclaration = Symbol("insertDeclaration");
 
-require("./parser-plugin");
+
 
 const { parseExpression } = require("@babel/parser");
 const toParallel = (callee => fExpression =>
     ({ type: "CallExpression", callee, arguments:[fExpression] }))
     (parseExpression("δ.parallel"));
 
-module.exports = function plugin({ types: t })
+module.exports = function plugin(babel)
 {
+    require("./parser-plugin")(babel.parse);
+
     // This has to be let in order for it to take place before all the function
     // declarations.
     const scope =
