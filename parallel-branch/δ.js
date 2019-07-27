@@ -13,7 +13,7 @@ module.exports.parallel = function parallel(f)
     return Task.taskReturning(f);
 }
 
-module.exports.depend = (function ()
+const depend = (function ()
 {
     const toTask = function toTask ([invocation, args])
     {
@@ -32,6 +32,8 @@ module.exports.depend = (function ()
         return Dependent.fromCall({ callee: taskCallee, args });
     }
 })();
+
+module.exports.depend = depend;
 
 function taskApply(f, thisArg, args)
 {
@@ -55,7 +57,33 @@ module.exports.operators =
             test ? success(consequent()) : branchingAlternate(),
 
         (test, branchingConsequent, branchingAlternate) =>
-            test ? branchingConsequent() : branchingAlternate() )
+            test ? branchingConsequent() : branchingAlternate() ),
+
+    "||": operator `||` (
+        (fLeft, fRight) => fLeft() || fRight(),
+
+        (branchingLeft, fRight) =>
+            depend(left => success(left || fRight()), branchingLeft()),
+
+        (fLeft, branchingRight) =>
+            (left => left ? success(left) : branchingRight())(fLeft()),
+
+        (branchingLeft, branchingRight) =>
+            depend(left => left ? success(left) : branchingRight(),
+                branchingLeft()) ),
+
+    "&&": operator `&&` (
+        (fLeft, fRight) => fLeft() && fRight(),
+
+        (branchingLeft, fRight) =>
+            depend(left => success(left && fRight()), branchingLeft()),
+
+        (fLeft, branchingRight) =>
+            (left => left ? branchingRight() : success(left))(fLeft()),
+
+        (branchingLeft, branchingRight) =>
+            depend(left => left ? branchingRight() : success(left),
+                branchingLeft()) )
 }
 
 precomputed (Array.prototype.map, [0], function (f, thisArg)

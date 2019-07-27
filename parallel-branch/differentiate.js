@@ -43,6 +43,8 @@ const tδ_operator = template(name => δ.operators[name]);
 const tδ_branch = template(expression => branch(expression));
 const tδ_branching = template(expression => branching(expression));
 
+const mapExpressions = require("./lazy-expressions");
+
 // at statement level?
 /*module.exports = map(
 {
@@ -108,7 +110,8 @@ function fromFunction(functionNode)
         hoistFunctionDeclarations,
         removeEmptyStatements,
         separateVariableDeclarations,
-        fromCascadingIfStatements)(body.body);
+        fromCascadingIfStatements,
+        mapExpressions)(body.body);
 
     const [tasks, statements] = normalizedStatements
         .map(toTasksAndStatements)
@@ -298,12 +301,6 @@ function toTasksAndStatements(statement)
         fromBranch(keyPath, statement) :
         fromBranching(keyPath, statement);
 
-    /*inCalleePosition ?
-        fromCalleePosition(keyPath, statement) :
-        fromArgumentPosition(keyPath, statement);*/
-
-//        fail("wrt[] can only appear in function calls.");
-
     if (is (Node.BlockVariableDeclaration, statement))
     {
         const [declarator] = statement.declarators;
@@ -320,32 +317,6 @@ function toTasksAndStatements(statement)
     const [tasks, statements] = toTasksAndStatements(replaced);
 
     return [[task, ...tasks], statements];
-}
-
-const until = function (predicate, transform, start)
-{
-    if (predicate(start))
-        return start;
-
-    return until(predicate, transform, transform(start));
-}
-
-function fromArgumentPosition(keyPath, statement)
-{
-    const [ancestor, remainingKeyPath] =
-        KeyPath.getJust(-3, keyPath, statement);
-
-    const isBranch = argument =>
-        is (Node.ComputedMemberExpression, argument) &&
-        isIdentifierExpression("branch", argument.object);
-    const ds = ancestor
-        .arguments
-        .flatMap((argument, index) => isBranch(argument) ? [index] : []);
-    const args = ancestor
-        .arguments
-        .map(argument => isBranch(argument) ? argument.property : argument);
-
-    return [-3, tδ(ancestor.callee, ds, args), ancestor];
 }
 
 function toArrayExpression(...elements)
