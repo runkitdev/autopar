@@ -4,22 +4,29 @@ const toBabel = require("@algebraic/ast/to-babel");
 const insertDeclaration = Symbol("insertDeclaration");
 const parserPlugin = require("./parser-plugin");
 
-const { parseExpression } = require("@babel/parser");
-const toParallel = (callee => fExpression =>
-    ({ type: "CallExpression", callee, arguments:[fExpression] }))
-    (parseExpression("δ.parallel"));
-
 
 module.exports = function plugin(babel)
 {
+    const { types: t, parse } = babel;
+    const parseExpression = code =>
+        parse(code).program.body[0].expression;
+
+    const fParallel = parseExpression("δ.parallel");
+    const toParallel = fExpression =>
+        t.CallExpression(fParallel, [fExpression]);
+
     // This has to be let in order for it to take place before all the function
     // declarations.
     const scope =
         (({ left: id, right: init }) => ({ kind:"let", id, init }))
         (parseExpression(`δ = require("parallel-branch/δ")`));
 
-    const Program = path => void(path.hub.file[insertDeclaration] = () =>
-        (path.scope.push(scope), delete path.hub.file[insertDeclaration]));
+    const Program = function (path, state)
+    {
+        path.hub.file[insertDeclaration] = () =>
+            (path.scope.push(scope), delete path.hub.file[insertDeclaration]);
+        state.toParallel = toParallel;
+    }
 
     return  {
                 name: "@parallel/branch",
@@ -31,8 +38,9 @@ module.exports = function plugin(babel)
             };
 }
 
-function FunctionExit(path, { file })
+function FunctionExit(path, state)
 {
+    const { file } = state;
     const functionNode = path.node;
 
     if (file[insertDeclaration])
@@ -52,12 +60,12 @@ function FunctionExit(path, { file })
         if (functionNode.type === "FunctionDeclaration")
         {
             const functionExpression =
-                toParallel({ ...babelNode, type: "FunctionExpression" });
+                state.toParallel({ ...babelNode, type: "FunctionExpression" });
 
             path.remove();
             path.scope.push({ id: parallel.id, kind:"let", init: functionExpression });
         }
         else
-            path.replaceWith(toParallel(babelNode));
+            path.replaceWith(state.toParallel(babelNode));
     }
 };
