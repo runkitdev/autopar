@@ -1,6 +1,7 @@
 const { List } = require("@algebraic/collections");
 
 const map = require("@algebraic/ast/map");
+const parse = require("@algebraic/ast/parse");
 const Node = require("@algebraic/ast/node");
 const KeyPath = require("@algebraic/ast/key-path");
 const NoKeyPaths = List(KeyPath)();
@@ -10,13 +11,29 @@ const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
 
+const tOperators = Object.fromEntries(["?:", "||", "&&"]
+    .map(name => [name, parse.expression(`δ.operators["${name}"]`)]));
+
 const template = require("@algebraic/ast/template");
-const tOperator = template(name => δ.operators[name]);
 const tBranching = template(expression => branching(expression));
 const functionWrap = body => Node.ArrowFunctionExpression({ body: Node.BlockStatement({ body:[Node.ReturnStatement({ argument: body })] }) });
 
 module.exports = map(
 {
+    ConditionalExpression(expression)
+    {
+        const { test, consequent, alternate } = expression;
+
+        if (!branches(consequent) && !branches(alternate))
+            return expression;
+
+        return Node.CallExpression(
+        {
+            callee: tOperators["?:"],
+            arguments: [test, ...toBranchingArguments(consequent, alternate)]
+        });
+    },
+
     LogicalExpression(expression)
     {
         const { left, right, operator } = expression;
@@ -24,20 +41,19 @@ module.exports = map(
         if (!branches(right))
             return expression;
 
-        const fromFunction = require("./differentiate");
-
-        const fLeft = functionWrap(left);
-        const leftBranches = branches(left);
-
-        const fRight = functionWrap(right);
-        const branchingRight = tBranching(fromFunction(fRight));
-
         return Node.CallExpression(
         {
-            callee: tOperator(operator),
-            arguments: [
-                leftBranches ? tBranching(fromFuncion(fLeft)) : fLeft,
-                branchingRight]
+            callee: tOperators[operator],
+            arguments: toBranchingArguments(left, right)
         });
     }
 });
+
+function toBranchingArguments(...args)
+{
+    const fromFunction = require("./differentiate");
+
+    return args.map(argument => branches(argument) ?
+        tBranching(fromFunction(functionWrap(argument))) :
+        functionWrap(argument));
+}

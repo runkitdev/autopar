@@ -416,7 +416,7 @@ function fromCascadingIfStatements(statements)
     const argument = Node.CallExpression(
     {
         // Should branch?...
-        callee: tδ_operator("ternary"),
+        callee: tδ_operator("?:"),
         arguments: [test,
             tδ_branching(consequentFunction),
             tδ_branching(alternateFunction)]

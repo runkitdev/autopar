@@ -46,7 +46,7 @@ module.exports.apply = parallelize.apply;
 
 module.exports.operators =
 {
-    ternary: operator `ternary` (
+    "?:": operator `?:` (
         (test, consequent, alternate) =>
             test ? consequent() : alternate(),
 
