@@ -43,7 +43,8 @@ const tδ_operator = template(name => δ.operators[name]);
 const tδ_branch = template(expression => branch(expression));
 const tδ_branching = template(expression => branching(expression));
 
-const mapExpressions = require("./lazy-expressions");
+const mapShortCircuitingExpressions =
+    require("./map-short-circuiting-expressions");
 
 // at statement level?
 /*module.exports = map(
@@ -110,7 +111,7 @@ function fromFunction(functionNode)
         removeEmptyStatements,
         separateVariableDeclarations,
         fromCascadingIfStatements,
-        mapExpressions)(bodyStatements);
+        mapShortCircuitingExpressions)(bodyStatements);
 
     const [tasks, statements] = normalizedStatements
         .map(toTasksAndStatements)
