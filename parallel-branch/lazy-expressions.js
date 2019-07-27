@@ -6,7 +6,8 @@ const Node = require("@algebraic/ast/node");
 const KeyPath = require("@algebraic/ast/key-path");
 const NoKeyPaths = List(KeyPath)();
 
-const freeVariables = (name, node) => node.freeVariables.get(name, NoKeyPaths);
+const freeVariables = (name, node) =>
+    node.freeVariables.get(name, NoKeyPaths);
 const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
@@ -14,9 +15,6 @@ const branches = node =>
 const tOperators = Object.fromEntries(["?:", "||", "&&"]
     .map(name => [name, parse.expression(`δ.operators["${name}"]`)]));
 
-const template = require("@algebraic/ast/template");
-const tBranching = template(expression => branching(expression));
-const functionWrap = body => Node.ArrowFunctionExpression({ body: Node.BlockStatement({ body:[Node.ReturnStatement({ argument: body })] }) });
 
 module.exports = map(
 {
@@ -49,11 +47,21 @@ module.exports = map(
     }
 });
 
-function toBranchingArguments(...args)
+const toBranchingArguments = (function ()
 {
-    const fromFunction = require("./differentiate");
+    const kBranching = Node.IdentifierExpression({ name: "branching" });
+    const tBranching = fExpression => Node.CallExpression
+        ({ callee: kBranching, arguments: [fExpression] });
+    const functionWrap = body => Node.ArrowFunctionExpression({ body: Node.BlockStatement({ body:[Node.ReturnStatement({ argument: body })] }) });
 
-    return args.map(argument => branches(argument) ?
-        tBranching(fromFunction(functionWrap(argument))) :
-        functionWrap(argument));
-}
+    return function toBranchingArguments(...args)
+    {
+        const fromFunction = require("./differentiate");
+
+        return args.map(argument => branches(argument) ?
+            tBranching(fromFunction(functionWrap(argument))) :
+            functionWrap(argument));
+    }
+})();
+
+
