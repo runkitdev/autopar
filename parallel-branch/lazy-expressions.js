@@ -52,7 +52,7 @@ const toBranchingArguments = (function ()
     const kBranching = Node.IdentifierExpression({ name: "branching" });
     const tBranching = fExpression => Node.CallExpression
         ({ callee: kBranching, arguments: [fExpression] });
-    const functionWrap = body => Node.ArrowFunctionExpression({ body: Node.BlockStatement({ body:[Node.ReturnStatement({ argument: body })] }) });
+    const functionWrap = body => Node.ArrowFunctionExpression({ body });
 
     return function toBranchingArguments(...args)
     {

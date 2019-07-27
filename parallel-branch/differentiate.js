@@ -102,16 +102,15 @@ module.exports = fromFunction;
 function fromFunction(functionNode)
 {
     const { body } = functionNode;
-
-    if (is (Node.Expression, body))
-        throw Error("NEED TO SUPPORT SINGLE EXPRESSION CASE");
+    const bodyStatements = is (Node.Expression, body) ?
+        [Node.ReturnStatement({ argument: body })] : body.body;
 
     const normalizedStatements = pipe(
         hoistFunctionDeclarations,
         removeEmptyStatements,
         separateVariableDeclarations,
         fromCascadingIfStatements,
-        mapExpressions)(body.body);
+        mapExpressions)(bodyStatements);
 
     const [tasks, statements] = normalizedStatements
         .map(toTasksAndStatements)
