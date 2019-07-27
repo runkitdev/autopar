@@ -1,15 +1,9 @@
-// We want whatever parser @babel/core is using.
-const { dirname } = require("path");
-const corePath = require.resolve("@babel/core");
-const babelRequire = require("module").createRequireFromPath(corePath);
-const parser = babelRequire("@babel/parser");
-const t = babelRequire("@babel/types");
-
-const addBabelParserPlugin = require("./add-babel-parser-plugin");
+const parser = require("./babel-parser-plugin");
 
 
-module.exports = function (parse) {
-addBabelParserPlugin(parse, "parallel-branch", superclass => class ParallelParser extends superclass
+module.exports = parser `parallel-branch` (({ types: t }, superclass) =>
+
+class ParallelBranchParser extends superclass
 {
     // By making parallel a unary operator, it opens us up to weird newline
     // insertion bugs. parallel function f() { }() shouldn't parse but does.
@@ -82,4 +76,4 @@ addBabelParserPlugin(parse, "parallel-branch", superclass => class ParallelParse
 
         return super.checkReservedWord(word, startLoc, ...rest);
     }
-}); }
+});

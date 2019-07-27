@@ -2,18 +2,16 @@ const differentiate = require("parallel-branch/differentiate");
 const fromBabel = require("@algebraic/ast/from-babel");
 const toBabel = require("@algebraic/ast/to-babel");
 const insertDeclaration = Symbol("insertDeclaration");
-
-
+const parserPlugin = require("./parser-plugin");
 
 const { parseExpression } = require("@babel/parser");
 const toParallel = (callee => fExpression =>
     ({ type: "CallExpression", callee, arguments:[fExpression] }))
     (parseExpression("δ.parallel"));
 
+
 module.exports = function plugin(babel)
 {
-    require("./parser-plugin")(babel.parse);
-
     // This has to be let in order for it to take place before all the function
     // declarations.
     const scope =
@@ -22,12 +20,12 @@ module.exports = function plugin(babel)
 
     const Program = path => void(path.hub.file[insertDeclaration] = () =>
         (path.scope.push(scope), delete path.hub.file[insertDeclaration]));
-    
+
     return  {
-                name: "@cause/task/transform",
+                name: "@parallel/branch",
 
                 manipulateOptions: (opts, parserOpts) =>
-                    parserOpts.plugins.push("parallel-branch"),
+                    parserOpts.plugins.push(parserPlugin(babel)),
 
                 visitor: { Program, Function: { exit: FunctionExit } }
             };
