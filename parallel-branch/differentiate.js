@@ -26,21 +26,7 @@ const t_success = value =>
 const t_successReturn = ({ argument, ...rest }) =>
     Node.ReturnStatement({ ...rest, argument: t_success(argument) });
 
-const template = require("@algebraic/ast/template");
-const toComputedProperty = ({ computed, property }) =>
-    !computed ?
-        Node.StringLiteral({ ...property, value: property.name }) :
-        property;
-const tδ = ((call, apply) =>
-    (callee, ds, args) =>
-        is (Node.MemberExpression, callee) ?
-            apply(callee.object, toComputedProperty(callee), ds, args) :
-            call(callee, ds, args))
-    (template((value, ds, args) => δ.call(value, ds, args)),
-     template((object, property, ds, args) =>
-        δ.apply(object, property, ds, args)))
-
-const { tOperators, tBranch, tBranching } = require("./templates");
+const { tApply, tBranch, tBranching,tOperators } = require("./templates");
 
 const mapShortCircuitingExpressions =
     require("./map-short-circuiting-expressions");
@@ -359,7 +345,7 @@ function fromBranching(keyPath, statement)
         .arguments
         .map(argument => isBranching(argument) ? argument.arguments[0] : argument);
 
-    const autoBranch = tBranch(tδ(ancestor.callee, ds, args));
+    const autoBranch = tBranch(tApply(ancestor.callee, ds, args));
     const autoBranchKeyPath = autoBranch.freeVariables.get("branch").get(0);
     const [, autoDeBranched] = fromBranch(autoBranchKeyPath, autoBranch);
 

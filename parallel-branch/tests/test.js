@@ -37,6 +37,7 @@ const x = {
 
 (async function ()
 {
+    console.log(x.a + "");
     console.log("hi" + await x.p());
 })();
 `, { plugins: [plugin] }).code);

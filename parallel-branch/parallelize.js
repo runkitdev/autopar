@@ -1,3 +1,4 @@
+const { isArray } = Array;
 const { fNamed } = require("@algebraic/type/declaration");
 const fail = require("@algebraic/type/fail");
 const CacheSymbol = Symbol("parallel-branch:parallelize-cache");
@@ -24,8 +25,13 @@ module.exports = parallelize;
 
 module.exports.parallelize = parallelize;
 
-module.exports.apply = Task.taskReturning((object, property, bs, args) =>
+module.exports.apply = Task.taskReturning((signature, bs, args) =>
 {
+    if (!isArray(signature))
+        return parallelize(signature)(...args);
+
+    const [object, property] = signature;
+
     return parallelize(object[property], bs).apply(object, args);
 })
 
