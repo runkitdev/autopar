@@ -1,4 +1,3 @@
-const fromEntries = require("@climb/from-entries");
 const { List } = require("@algebraic/collections");
 
 const map = require("@algebraic/ast/map");
@@ -13,8 +12,7 @@ const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
 
-const tOperators = fromEntries(["?:", "||", "&&"]
-    .map(name => [name, parse.expression(`δ.operators["${name}"]`)]));
+const { tArrowFunctionWrap, tBranching, tOperators } = require("./templates");
 
 
 module.exports = map(
@@ -48,21 +46,12 @@ module.exports = map(
     }
 });
 
-const toBranchingArguments = (function ()
+function toBranchingArguments(...args)
 {
-    const kBranching = Node.IdentifierExpression({ name: "branching" });
-    const tBranching = fExpression => Node.CallExpression
-        ({ callee: kBranching, arguments: [fExpression] });
-    const functionWrap = body => Node.ArrowFunctionExpression({ body });
+    const fromFunction = require("./differentiate");
 
-    return function toBranchingArguments(...args)
-    {
-        const fromFunction = require("./differentiate");
-
-        return args.map(argument => branches(argument) ?
-            tBranching(fromFunction(functionWrap(argument))) :
-            functionWrap(argument));
-    }
-})();
-
+    return args.map(argument => branches(argument) ?
+        tBranching(fromFunction(tArrowFunctionWrap(argument))) :
+        tArrowFunctionWrap(argument));
+}
 

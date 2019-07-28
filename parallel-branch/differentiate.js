@@ -40,9 +40,7 @@ const tδ = ((call, apply) =>
      template((object, property, ds, args) =>
         δ.apply(object, property, ds, args)))
 
-const tδ_operator = template(name => δ.operators[name]);
-const tδ_branch = template(expression => branch(expression));
-const tδ_branching = template(expression => branching(expression));
+const { tOperators, tBranch, tBranching } = require("./templates");
 
 const mapShortCircuitingExpressions =
     require("./map-short-circuiting-expressions");
@@ -361,7 +359,7 @@ function fromBranching(keyPath, statement)
         .arguments
         .map(argument => isBranching(argument) ? argument.arguments[0] : argument);
 
-    const autoBranch = tδ_branch(tδ(ancestor.callee, ds, args));
+    const autoBranch = tBranch(tδ(ancestor.callee, ds, args));
     const autoBranchKeyPath = autoBranch.freeVariables.get("branch").get(0);
     const [, autoDeBranched] = fromBranch(autoBranchKeyPath, autoBranch);
 
@@ -417,10 +415,10 @@ function fromCascadingIfStatements(statements)
     const argument = Node.CallExpression(
     {
         // Should branch?...
-        callee: tδ_operator("?:"),
+        callee: tOperators["?:"],
         arguments: [test,
-            tδ_branching(consequentFunction),
-            tδ_branching(alternateFunction)]
+            tBranching(consequentFunction),
+            tBranching(alternateFunction)]
     });
 
     const returnIf = Node.ReturnStatement({ argument });
