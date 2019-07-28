@@ -1,3 +1,4 @@
+const fromEntries = require("@climb/from-entries");
 const { data, number, union, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
@@ -11,7 +12,7 @@ const reachability = require("@climb/dfs-reachability");
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
-const forbid = (...names) => Object.fromEntries(names
+const forbid = (...names) => fromEntries(names
     .map(name => [name, () => fail.syntax(
         `${vernacular(name)}s are not allowed in concurrent functions.`)]));
 const unexpected = node => fail.syntax(

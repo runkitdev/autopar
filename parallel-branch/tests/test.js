@@ -19,20 +19,25 @@ const x = {
 
         const x = 10 + a;
         const y = [1,2,3].map(branching u);
+        const z = true && branch u(300000);
     
-        return x + y[0];
+        return x + y[0] + (z ? 2 : 2);
     },
     z: parallel function f()
     {
         const y = x.y;
 
         return branch u(20) + branch x.y(10) + branch y(10) + branch x["y"](10);
+    },
+    p: parallel function p()
+    {
+        return (console.log("at least here"), true) && branch x.y(30);
     }
 };
 
 (async function ()
 {
-    console.log(await x.z());
+    console.log("hi" + await x.p());
 })();
 `, { plugins: [plugin] }).code);
 

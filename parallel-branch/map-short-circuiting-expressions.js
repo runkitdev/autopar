@@ -1,3 +1,4 @@
+const fromEntries = require("@climb/from-entries");
 const { List } = require("@algebraic/collections");
 
 const map = require("@algebraic/ast/map");
@@ -12,7 +13,7 @@ const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
 
-const tOperators = Object.fromEntries(["?:", "||", "&&"]
+const tOperators = fromEntries(["?:", "||", "&&"]
     .map(name => [name, parse.expression(`δ.operators["${name}"]`)]));
 
 

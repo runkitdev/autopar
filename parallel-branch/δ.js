@@ -106,46 +106,6 @@ precomputed (Array.prototype.map, [0], function (f, thisArg)
 });
 
 /*
-
- (
-    ([1,2]) =>
-    )
-
-
-(t, c, a) => t ? c() : a();
-
-module.exports.operators =
-{
-    ...operator `?:` (
-
-        ((test, consequent, alternate) =>
-            test ? consequent() : alternate()),
-        [[1], (test, δconsequent, alternate) =>
-            test ? δconsequent() : success(alternate())],
-        [[2], (test, consequent, δalternate) =>
-            test ? success(consequent()) : δalternate()],
-        [[1,2], (test, δconsequent, δalternate) =>
-            test ? δconsequent() : δalternate()])
-}
-
-console.log(module.exports.operators["?:"]);
-
-function operator([name])
-{
-    return function (f, ...precached)
-    {
-        const operator = fNamed(name, f);
-
-        precached.map(([ds, df]) => cache(operator, ds, () => df));
-
-        return { [name]: operator };
-    }
-}
-
-
-
-
-/*
 module.exports = δ;
 
 function parallelize(f, ds)
@@ -178,82 +138,6 @@ function fromStandard(f, ds, knownSync = false)
         fromAsync((...args) => Promise.resolve(f(...args)));
 }
 
-const oprators =
-
-const operators = Object.fromEntries(Object.entries(
-{
-    "+": (lhs, rhs) => lhs + rhs,
-    "-": (lhs, rhs) => lhs - rhs,
-    "*": (lhs, rhs) => lhs * rhs,
-    "/": (lhs, rhs) => lhs / rhs,
-    "%": (lhs, rhs) => lhs / rhs,
-    "**": (lhs, rhs) => lhs ** rhs,
-    "unary -": value => -value,
-    "unary +": value => +value,
-
-    "&": (lhs, rhs) => lhs & rhs,
-    "|": (lhs, rhs) => lhs | rhs,
-    "^": (lhs, rhs) => lhs ^ rhs,
-    "<<": (lhs, rhs) => lhs << rhs,
-    ">>": (lhs, rhs) => lhs >> rhs,
-    ">>>": (lhs, rhs) => lhs >> rhs,
-    "~": value => ~value,
-
-    "==": (lhs, rhs) => lhs == rhs,
-    "===": (lhs, rhs) => lhs === rhs,
-    "!=": (lhs, rhs) => lhs != rhs,
-    "!==": (lhs, rhs) => lhs !== rhs,
-    ">": (lhs, rhs) => lhs > rhs,
-    ">=": (lhs, rhs) => lhs >= rhs,
-    "<": (lhs, rhs) => lhs < rhs,
-    "<=": (lhs, rhs) => lhs <= rhs,
-
-    "!": value => !value,
-
-    "typeof": value => typeof value,
-    "in": (lhs, rhs) => lhs in rhs,
-    "instanceof": (lhs, rhs) => lhs instanceof rhs,
-
-    ".": (lhs, rhs) => (value =>
-        typeof value === "function" ?
-            value.bind(lhs) : value)(lhs[rhs])
-
-}).map(([operator, f]) =>
-    [operator, (cache(fNamed(operator, f), [],
-        (f, ds) => fromStandard(f, ds, true)), f)]));
-
-operators["?:"] = fNamed("?:",
-    (test, consequent, alternate) =>
-        test ? consequent() : alternate());
-
-cache(operators["?:"], [1], () =>
-    (test, δconsequent, alternate) =>
-        test ? δconsequent() : success(alternate()));
-cache(operators["?:"], [2], () =>
-    (test, consequent, δalternate) =>
-        test ? success(consequent()) : δalternate());
-cache(operators["?:"], [1,2], () =>
-    (test, δconsequent, δalternate) =>
-        test ? δconsequent() : δalternate());
-
-operators["||"] = fNamed("||", () => (lhs, rhs) => lhs() || rhs());
-cache(operators["||"], [0], () => (δlhs, rhs) =>
-    δ.depend(false, lhsValue => success(lhsValue || rhs()), δlhs()));
-cache(operators["||"], [1], () => (lhs, δrhs) =>
-    (lhsValue => lhsValue ? success(lhsValue) : δrhs())(lhs()));
-cache(operators["||"], [0, 1], () => (δlhs, δrhs) =>
-    δ.depend(false, lhsValue =>
-        lhsValue ? success(lhsValue) : δrhs(), δlhs()));
-
-operators["&&"] = fNamed("&&", () => (lhs, rhs) => lhs() && rhs());
-cache(operators["&&"], [0], () => (δlhs, rhs) =>
-    δ.depend(false, lhsValue => success(lhsValue && rhs()), δlhs()));
-cache(operators["&&"], [1], () => (lhs, δrhs) =>
-    (lhsValue => !lhsValue ? success(lhsValue) : δrhs())(lhs()));
-cache(operators["&&"], [0, 1], () => (δlhs, δrhs) =>
-    δ.depend(false, lhsValue =>
-        !lhsValue ? success(lhsValue) : δrhs(), δlhs()));
-
 const δmap = (map, convertBack) => cache(map, [0], () => function (f)
 {
     const dependencies = map.call(this, f);
@@ -269,25 +153,4 @@ const { List, Set, OrderedSet, Seq, Stack } = require("@algebraic/collections");
 [List, Set, OrderedSet, Seq, Stack]
     .map(type => [type, Object.getPrototypeOf(type(Object)())])
     .map(([type, prototype]) => δmap(prototype.map, type(Object)));
-
-δ.operators = operators;
 */
-/*
-console.log(δ(operators["?:"], [1])+"");
-console.log(δ(operators["?:"], [1]));
-console.log(δ(operators["?:"], [2]));
-console.log(δ(operators["?:"], [1, 2]));
-
-console.log(δ(operators["||"], [0])+"");
-console.log(δ(operators["||"], [0]));
-console.log(δ(operators["||"], [1]));
-console.log(δ(operators["||"], [0, 1]));
-
-console.log(δ(operators["&&"], [0])+"");
-console.log(δ(operators["&&"], [0]));
-console.log(δ(operators["&&"], [1]));
-console.log(δ(operators["&&"], [0, 1]));
-
-//console.log(δ(operators["+"], [1, 2]));
-console.log(δ(operators["&&"], [1])+"");
-module.exports.operators = operators;*/
