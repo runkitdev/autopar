@@ -1,4 +1,6 @@
+const flatMap = require("@climb/flat-map");
 const fromEntries = require("@climb/from-entries");
+
 const { data, number, union, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
@@ -169,10 +171,10 @@ function toDependencyPairs(tasks, statements)
     // assume the opposite isn't possible since it is a syntax error to redclare
     // a const, and we treat function declarations as consts in concurrent
     // contexts.
-    const declarations = Map(string, ConcurrentNode)(sorted
-        .map(node => [node, node.blockBindingNames.keySeq()])
-        .flatMap(([node, names]) =>
-            names.map(name => [name, node]).toArray()));
+    const declarations = Map(string, ConcurrentNode)(
+        flatMap(([node, names]) =>
+            names.map(name => [name, node]).toArray(),
+            sorted.map(node => [node, node.blockBindingNames.keySeq()])));
 
     // We create a "map" (since the keys are contiguous indexes we just use an
     // array) of all the direct dependencies. This is otherwise known as an
@@ -338,9 +340,9 @@ function fromBranching(keyPath, statement)
     const isBranching = argument =>
         is (Node.CallExpression, argument) &&
         isIdentifierExpression("branching", argument.callee);
-    const ds = ancestor
-        .arguments
-        .flatMap((argument, index) => isBranching(argument) ? [index] : []);
+    const ds = flatMap(
+        (argument, index) => isBranching(argument) ? [index] : [],
+        ancestor.arguments);
     const args = ancestor
         .arguments
         .map(argument => isBranching(argument) ? argument.arguments[0] : argument);
@@ -425,15 +427,15 @@ function removeEmptyStatements(statements)
 
 function separateVariableDeclarations(statements)
 {
-    const updated = statements
-        .flatMap(statement =>
-            !is (Node.BlockVariableDeclaration, statement) ||
-            statement.declarators.length <= 1 ?
-                statement :
-                statement.declarators
-                    .map(declarator =>
-                        Node.BlockVariableDeclaration
-                            ({ ...statement, declarators: [declarator] })));
+    const separate = statement =>
+        !is (Node.BlockVariableDeclaration, statement) ||
+        statement.declarators.length <= 1 ?
+            statement :
+            statement.declarators
+                .map(declarator =>
+                    Node.BlockVariableDeclaration
+                        ({ ...statement, declarators: [declarator] }));
+    const updated = flatMap(separate, statements);
 
     return  updated.length !== statements.length ?
             updated :

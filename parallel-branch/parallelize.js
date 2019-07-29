@@ -1,4 +1,6 @@
 const { isArray } = Array;
+const flatMap = require("@climb/flat-map");
+
 const { fNamed } = require("@algebraic/type/declaration");
 const fail = require("@algebraic/type/fail");
 const CacheSymbol = Symbol("parallel-branch:parallelize-cache");
@@ -61,11 +63,11 @@ function wrapped(name, bs, bf)
 module.exports.operator = (function ()
 {
     const fNameRegExp = /^\(([^\)]*)\)/;
-    const findBs = f => fNameRegExp
-        .exec(f + "")[1]
-        .split(/\s*,\s*/)
-        .flatMap((name, index) =>
-            name.startsWith("branching") ? [index] : []);
+    const findBs = f => flatMap(
+        (name, index) => name.startsWith("branching") ? [index] : [],
+        fNameRegExp
+            .exec(f + "")[1]
+            .split(/\s*,\s*/));
 
     return ([name]) => function (f, ...bfs)
     {
