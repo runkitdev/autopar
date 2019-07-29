@@ -9,6 +9,9 @@
   "keywords": [],
   "author": "Francisco Ryan Tolmasky I",
   "license": "MIT",
+  "dependencies": {
+    "@climb/partition": "1.0.0-alpha.5"
+  },
   "peerDependencies": {
     "@babel/core": "^7.5.5"
   }

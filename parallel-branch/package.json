@@ -12,6 +12,7 @@
   "dependencies": {
     "@climb/dfs-reachability": "1.0.0-alpha.5",
     "@climb/flat-map": "1.0.0-alpha.5",
-    "@climb/from-entries": "1.0.0-alpha.5"
+    "@climb/from-entries": "1.0.0-alpha.5",
+    "@climb/partition": "1.0.0-alpha.5"
   }
 }
