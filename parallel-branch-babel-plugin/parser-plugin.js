@@ -1,6 +1,5 @@
 const parser = require("./babel-parser-plugin");
 
-
 module.exports = parser `parallel-branch` (({ types: t }, superclass) =>
 
 class ParallelBranchParser extends superclass
@@ -14,6 +13,12 @@ class ParallelBranchParser extends superclass
     {
         return class ParallelScopeHandler extends super.getScopeHandler()
         {
+            constructor(...args)
+            {
+                super(...args);
+                this.nextScopeIsParallel = false;
+            }
+
             enter(...args)
             {
                 super.enter(...args);

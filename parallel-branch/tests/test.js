@@ -5,6 +5,8 @@ const log_and_val = x => (console.log(x), eval(x));
 
 log_and_val(transform(`
 
+module.exports.exists = parallel (path => existsSync(path) && path);
+
 const u = async id => (await 0, id);
 
 const x = {
