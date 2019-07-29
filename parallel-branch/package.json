@@ -1,6 +1,6 @@
 {
   "name": "parallel-branch",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "Automatic Concurrency through Asynchronous Derivatives",
   "main": "index.js",
   "scripts": {

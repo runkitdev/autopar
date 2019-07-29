@@ -1,6 +1,6 @@
 {
   "name": "@parallel-branch/spawn",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.3",
   "description": "",
   "main": "spawn.js",
   "scripts": {
