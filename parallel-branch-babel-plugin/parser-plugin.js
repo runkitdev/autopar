@@ -36,6 +36,15 @@ class ParallelBranchParser extends superclass
         }
     }
 
+    parseArrowExpression(...args)
+    {
+        // We *have to* check this first.
+        const wasInParallel = this.scope.nextScopeIsParallel;
+        const node = super.parseArrowExpression(...args);
+
+        return wasInParallel ? Object.assign(node, { parallel: true }) : node;
+    }
+
     parseFunction(...args)
     {
         // We *have to* check this first.

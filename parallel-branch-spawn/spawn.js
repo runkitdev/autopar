@@ -9,7 +9,8 @@ const Result = data `spawn.Result` (
 
 const ExitCodeError = data `spawn.ExitCodeError` (
     exitCode    => number,
-    stderr      => string );
+    stderr      => string,
+    stack       => string );
 
 module.exports = function spawn(command, args = [], options = { })
 {
@@ -30,11 +31,12 @@ module.exports = function spawn(command, args = [], options = { })
             stdio[0].pipe(process.stdin);
 
         const output = { stdout: "", stderr: "" };
+        const stack = Error().stack;
 
         process.on("error", error => reject(error));
         process.on("exit", exitCode =>
             exitCode !== 0 && throwOnExitCode ?
-                reject(ExitCodeError({ ...output, exitCode })) :
+                reject(ExitCodeError({ ...output, exitCode, stack })) :
                 resolve(Result({ ...output, exitCode })));
 
         process.stdout.on("data", data => output.stdout += data);
