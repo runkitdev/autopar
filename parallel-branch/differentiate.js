@@ -103,7 +103,8 @@ function fromFunction(functionNode)
     const [tasks, statements] = normalizedStatements
         .map(toTasksAndStatements)
         .reduce((accum, [tasks, statements]) =>
-            [[...accum[0], ...tasks], [...accum[1], ...statements]]);
+            [[...accum[0], ...tasks], [...accum[1], ...statements]],
+            [[], []]);
     const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
     const dependencyChain = toDependencyChain(taskPairs, statementPairs);
     const updatedBody =
@@ -275,14 +276,17 @@ function toTasksAndStatements(statement)
         return [[], [statement]];
 
 
+    // Branch must come first!
+    // This is the worst way to do this...
     const firstBranchKeyPath = branchKeyPaths.reduce((longest, keyPath) =>
         longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
     const firstBranchingKeyPath = branchingKeyPaths.reduce((longest, keyPath) =>
         longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
 
-    // This is the worst way to do this...
+    // -2 comes from the fact that x(branching y) actually represents a branch of
+    // the x call.
     const branchIsLonger =
-        firstBranchKeyPath.length > firstBranchingKeyPath.length;
+        firstBranchKeyPath.length > firstBranchingKeyPath.length - 2;
     const keyPath = branchIsLonger ? firstBranchKeyPath : firstBranchingKeyPath;
     const [insertionPoint, newChild, ancestor] = branchIsLonger ?
         fromBranch(keyPath, statement) :
