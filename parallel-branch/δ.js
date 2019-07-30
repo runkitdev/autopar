@@ -15,8 +15,9 @@ module.exports.parallel = function parallel(f)
 
 const depend = (function ()
 {
-    const toTask = function toTask ([invocation, args])
+    const toTask = function toTask (inputs)
     {
+        const [invocation, args] = inputs;
         const isMemberCall = isArray(invocation);
         const thisArg = isMemberCall ? invocation[0] : void(0);
         const f = isMemberCall ? thisArg[invocation[1]] : invocation;
@@ -63,27 +64,27 @@ module.exports.operators =
         (fLeft, fRight) => fLeft() || fRight(),
 
         (branchingLeft, fRight) =>
-            depend(left => success(left || fRight()), branchingLeft()),
+            depend(left => success(left || fRight()), [branchingLeft, []]),
 
         (fLeft, branchingRight) =>
             (left => left ? success(left) : branchingRight())(fLeft()),
 
         (branchingLeft, branchingRight) =>
             depend(left => left ? success(left) : branchingRight(),
-                branchingLeft()) ),
+                [branchingLeft, []]) ),
 
     "&&": operator `&&` (
         (fLeft, fRight) => fLeft() && fRight(),
 
         (branchingLeft, fRight) =>
-            depend(left => success(left && fRight()), branchingLeft()),
+            depend(left => success(left && fRight()), [branchingLeft, []]),
 
         (fLeft, branchingRight) =>
             (left => left ? branchingRight() : success(left))(fLeft()),
 
         (branchingLeft, branchingRight) =>
             depend(left => left ? branchingRight() : success(left),
-                branchingLeft()) )
+                [branchingLeft, []]) )
 }
 
 precomputed (Array.prototype.map, [0], function (f, thisArg)
