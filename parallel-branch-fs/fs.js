@@ -27,4 +27,4 @@ module.exports.write = parallel ((path, ...rest) =>
 const { readFile } = fs.promises;
 
 module.exports.read = parallel ((path, ...rest) =>
-    (branch readFile(path, ...rest), path));
+    branch readFile(path, ...rest));
