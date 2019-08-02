@@ -2,6 +2,7 @@ const { isArray, from: ArrayFrom } = Array;
 
 const Task = require("@cause/task");
 const Dependent = require("@cause/task/dependent");
+const { None } = require("@algebraic/type/optional");
 
 const { parallelize, operator, precomputed } = require("./parallelize");
 const success = value => Task.Success({ value });
@@ -21,16 +22,16 @@ const depend = (function ()
         const isMemberCall = isArray(invocation);
         const thisArg = isMemberCall ? invocation[0] : void(0);
         const f = isMemberCall ? thisArg[invocation[1]] : invocation;
-
+//console.log("f:", f, "this:", thisArg, "args:", args);
         return taskApply(f, thisArg, args);
     }
 
     return function depend(callee, ...invocations)
     {
-        const taskCallee = Task.Success({ value: callee });
-        const args = invocations.map(toTask);
-
-        return Dependent.fromCall({ callee: taskCallee, args });
+        return Dependent.fromCall(
+            (succeeded, result) =>
+                succeeded ? callee(...result) : result,
+            invocations.map(toTask), None);
     }
 })();
 
@@ -41,6 +42,14 @@ function taskApply(f, thisArg, args)
     return  Task.isTaskReturning(f) ?
             f.apply(thisArg, args) :
             Task.fromResolvedCall(thisArg, f, args);
+}
+
+module.exports.guard = function guard(attempt, recover)
+{
+    return Dependent.fromCall(
+        (succeeded, results) =>
+            succeeded ? results[0] : recover(results),
+        invocations.map(toTask), None);
 }
 
 module.exports.apply = parallelize.apply;
