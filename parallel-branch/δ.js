@@ -6,7 +6,7 @@ const { None } = require("@algebraic/type/optional");
 
 const { parallelize, operator, precomputed } = require("./parallelize");
 const success = value => Task.Success({ name:"mm", value });
-const aggregate = failures => Task.Failures.Aggregate({ name:"d", failures });
+const aggregate = failures => Task.Failure.Aggregate({ name:"d", failures });
 
 module.exports.success = success;
 
