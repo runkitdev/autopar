@@ -5,7 +5,8 @@ const Dependent = require("@cause/task/dependent");
 const { None } = require("@algebraic/type/optional");
 
 const { parallelize, operator, precomputed } = require("./parallelize");
-const success = value => Task.Success({ value });
+const success = value => Task.Success({ name:"mm", value });
+const aggregate = failures => Task.Failures.Aggregate({ name:"d", failures });
 
 module.exports.success = success;
 
@@ -29,8 +30,9 @@ const depend = (function ()
     return function depend(callee, ...invocations)
     {
         return Dependent.fromCall(
-            (succeeded, result) =>
-                succeeded ? callee(...result) : result,
+            (succeeded, results) => succeeded ?
+                callee(...results.map(task => task.value)) :
+                aggregate(results),
             invocations.map(toTask), None);
     }
 })();
@@ -109,10 +111,12 @@ precomputed (Array.prototype.map, [0], function (f, thisArg)
 
     // Dependent will call us with the resolved tasks, so now do a "mock" map
     // to return the those elements.
-    const callee = success((...args) =>
-        success(this.map((_, index) => args[index])));
+    const callee = (succeeded, results) =>
+        succeeded ?
+            success(this.map((_, index) => results[index])) :
+            aggregate(results);
 
-    return Dependent.fromCall({ callee, args: tasks });
+    return Dependent.fromCall(callee, tasks, None);
 });
 
 /*

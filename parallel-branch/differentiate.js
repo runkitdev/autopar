@@ -275,7 +275,6 @@ function toTasksAndStatements(statement)
     if (branchKeyPaths.size <= 0 && branchingKeyPaths.size <= 0)
         return [[], [statement]];
 
-
     // Branch must come first!
     // This is the worst way to do this...
     const firstBranchKeyPath = branchKeyPaths.reduce((longest, keyPath) =>
