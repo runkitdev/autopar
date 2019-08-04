@@ -113,7 +113,7 @@ precomputed (Array.prototype.map, [0], function (f, thisArg)
     // to return the those elements.
     const callee = (succeeded, results) =>
         succeeded ?
-            success(this.map((_, index) => results[index])) :
+            success(this.map((_, index) => results.get(index).value)) :
             aggregate(results);
 
     return Dependent.fromCall(callee, tasks, None);
