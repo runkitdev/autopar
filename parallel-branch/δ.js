@@ -47,11 +47,11 @@ function taskApply(f, thisArg, args)
 }
 
 module.exports.guard = function guard(attempt, recover)
-{
+{console.log("HERE!!!");
     return Dependent.fromCall(
         (succeeded, results) =>
             succeeded ? results[0] : recover(results),
-        invocations.map(toTask), None);
+        [attempt()], None);
 }
 
 module.exports.apply = parallelize.apply;

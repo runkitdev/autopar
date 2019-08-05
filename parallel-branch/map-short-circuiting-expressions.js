@@ -12,11 +12,30 @@ const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
 
-const { tArrowFunctionWrap, tBranching, tOperators } = require("./templates");
+const { tArrowFunctionWrap, tBranching, tOperators, tGuard } = require("./templates");
 
 
 module.exports = map(
 {
+    TryStatement(statement)
+    {
+        const fromFunction = require("./differentiate");
+        const { block, handler } = statement;
+        const fBlock = tArrowFunctionWrap(block);
+        const fHandler = handler && Node.ArrowFunctionExpression(
+        {
+            params: handler.param && [handler.param],
+            body: handler.body
+        });
+        const expression = Node.CallExpression(
+        {
+            callee: tGuard,
+            arguments: [fromFunction(fBlock), fromFunction(fHandler)]
+        });
+
+        return Node.ExpressionStatement({ expression });
+    },
+
     ConditionalExpression(expression)
     {
         const { test, consequent, alternate } = expression;
@@ -27,7 +46,9 @@ module.exports = map(
         return Node.CallExpression(
         {
             callee: tOperators["?:"],
-            arguments: [test, ...toBranchingArguments(consequent, alternate)]
+            arguments: [test,
+                toMaybeBranching(consequent),
+                toMaybeBranching(alternate)]
         });
     },
 
@@ -41,17 +62,17 @@ module.exports = map(
         return Node.CallExpression(
         {
             callee: tOperators[operator],
-            arguments: toBranchingArguments(left, right)
+            arguments: [toMaybeBranching(left), toMaybeBranching(right)]
         });
     }
 });
 
-function toBranchingArguments(...args)
+function toMaybeBranching(argument)
 {
     const fromFunction = require("./differentiate");
 
-    return args.map(argument => branches(argument) ?
-        tBranching(fromFunction(tArrowFunctionWrap(argument))) :
-        tArrowFunctionWrap(argument));
+    return  branches(argument) ?
+            tBranching(fromFunction(tArrowFunctionWrap(argument))) :
+            tArrowFunctionWrap(argument);
 }
 

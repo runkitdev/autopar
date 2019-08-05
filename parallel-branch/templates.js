@@ -18,6 +18,8 @@ exports.tBranching = fExpression => Node.CallExpression
 exports.tOperators = fromEntries(["?:", "||", "&&"]
     .map(name => [name, parse.expression(`δ.operators["${name}"]`)]));
 
+exports.tGuard = parse.expression("δ.guard");
+
 exports.tArrowFunctionWrap = expression =>
     Node.ArrowFunctionExpression({ body: expression });
 

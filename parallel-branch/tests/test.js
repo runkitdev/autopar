@@ -4,12 +4,48 @@ const transform = require("@babel/core").transform;
 const log_and_val = x => (console.log(x), eval(x));
 
 log_and_val(transform(`
+console.log(Object.keys(δ));
+module.exports = parallel function dependencies(properties)
+{
+    if (false)
+        return false;
+
+    const tarname = branch f();
+
+    if (branch exists(tarname))
+        return whatever;
+
+    return something;
+}
+
+module.exports = parallel function dependencies(properties)
+{
+    if (false)
+        return false;
+
+    const tarname = branch f();
+    return operators["?:"](
+        branch exists(tarname),
+        branching parallel(() => { return whatever }),
+        branching parallel(() => { return something }));
+}
 
 module.exports.exists = parallel (path => existsSync(path) && path);
 
 const u = async id => (await 0, id);
 
 const x = {
+    d: parallel function d()
+    {
+        try
+        {
+            const x = branch p();
+        }
+        catch([...errors])
+        {
+            console.log("got: " +errors);
+        }
+    },
     a: parallel function f(a)
     {
         return f(branching d, branching e);
@@ -39,8 +75,11 @@ const x = {
 
 (async function ()
 {
-    console.log(x.a + "");
-    console.log("hi" + await x.p());
+//    console.log(x.a + "");
+//    console.log("hi" + await x.p());
+try {
+    console.log("hi" + await x.d()); }
+    catch (e) { console.log("---> " + e) }
 })();
 `, { plugins: [plugin] }).code);
 
