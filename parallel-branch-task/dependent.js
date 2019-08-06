@@ -107,7 +107,7 @@ Dependent.Blocked.update = update
     .on(Task.Completed, function (dependent, event, [previous, index])
     {
         const task = dependent[previous].get(index);
-        const next = is (Task.Success, dependent) ? "successes" : "failures";
+        const next = is (Task.Success, event) ? "successes" : "failures";
         const updated = Dependent.from(
         {
             ...dependent,
