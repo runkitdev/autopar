@@ -1,15 +1,21 @@
-const { data, union, is, any } = require("@algebraic/type");
+const { data, union, is, any, string } = require("@algebraic/type");
 const Cause = require("@cause/cause");
 const update = require("@cause/cause/update");
 const inspect = Symbol.for("nodejs.util.inspect.custom");
 const Task = require("./task");
+const { KeyPathsByName } = require("@algebraic/ast/key-path");
 
 
 const Independent = union `Task.Independent` (
     data `Waiting` (
-        cause => Cause(any) ),
+        cause => Cause(any),
+        contentAddress  => [string, `same`],
+        ([independent]) => KeyPathsByName.compute (take => `contentAddress`) ),
+
     data `Running` (
-        cause => Cause(any) ) );
+        cause => Cause(any),
+        contentAddress  => [string, `same`],
+        ([independent]) => KeyPathsByName.compute (take => `contentAddress`) ) );
 
 const Started = data `Task.Started` ( );
 

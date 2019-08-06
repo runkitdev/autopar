@@ -3,6 +3,8 @@ const Optional = require("@algebraic/type/optional");
 const { List } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const Cause = require("@cause/cause");
+const { KeyPathsByName } = require("@algebraic/ast/key-path");
+
 
 const Task = union `Task` (
     is      =>  Task.Waiting,
@@ -19,16 +21,19 @@ Task.Failure = union `Task.Failure` (
     or      =>  Task.Failure.Aggregate );
 
 Task.Failure.Direct = data `Task.Failure.Direct` (
-    name        =>  Task.Identifier,
-    value       =>  any );
+    name            =>  Task.Identifier,
+    value           =>  any,
+    ([independent]) =>  data.always (KeyPathsByName.None) );
 
 Task.Failure.Aggregate = data `Task.Failure.Aggregate` (
-    name        =>  Task.Identifier,
-    failures    =>  List(Task.Failure) );
+    name            =>  Task.Identifier,
+    failures        =>  List(Task.Failure),
+    ([independent]) =>  data.always (KeyPathsByName.None) );
 
 Task.Success = data `Task.Success` (
-    name        =>  Task.Identifier,
-    value       =>  any );
+    name            =>  Task.Identifier,
+    value           =>  any,
+    ([independent]) =>  data.always (KeyPathsByName.None) );
 
 Task.Completed = union `Task.Completed` (
     is  =>  Task.Success,

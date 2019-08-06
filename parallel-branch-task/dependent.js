@@ -2,6 +2,7 @@ const { data, union, any, number, is, of } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const update = require("@cause/cause/update");
 const Task = require("./task");
+const { KeyPathsByName } = require("@algebraic/ast/key-path");
 
 Error.stackTraceLimit = 1000;
 
@@ -17,12 +18,17 @@ const Dependent = union `Task.Dependent` (
     // state. The fact that we have created it necessarily represents that we
     // have entered it.
     data `Blocked` (
-        name        => Task.Identifier,
-        consequent  => Function,
-        waiting     => List(Dependency),
-        active      => List(Dependency),
-        successes   => List(Dependency),
-        failures    => List(Dependency) ),
+        name            =>  Task.Identifier,
+        consequent      =>  Function,
+        waiting         =>  List(Dependency),
+        active          =>  List(Dependency),
+        successes       =>  List(Dependency),
+        failures        =>  List(Dependency),
+        ([independent]) =>  KeyPathsByName.compute (
+                                take    =>  `waiting.task.independent`,
+                                take    =>  `active.task.independent`,
+                                take    =>  `successes.task.independent`,
+                                take    =>  `failures.task.independent` ) ),
 
     // `task` might be "active" or possibly waiting itself, so it's not really
     // appropriate to call this "Running". The only thing that is true at this
@@ -33,8 +39,10 @@ const Dependent = union `Task.Dependent` (
     // failure. If we were a form of waiting, a peer failure would allow this to
     // be canceled.
     data `Unblocked` (
-        name        => Task.Identifier,
-        task        => Task ) );
+        name            =>  Task.Identifier,
+        task            =>  Task,
+        ([independent]) =>  KeyPathsByName.compute (
+                                take    =>  `task.independent` ) ) );
 
 module.exports = Dependent;
 
