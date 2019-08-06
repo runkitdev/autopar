@@ -5,7 +5,7 @@ const { fNamed } = require("@algebraic/type/declaration");
 const fail = require("@algebraic/type/fail");
 const CacheSymbol = Symbol("parallel-branch:parallelize-cache");
 const toCacheKey = bs => JSON.stringify(bs);
-const Task = require("@cause/task");
+const Task = require("@parallel-branch/task");
 
 const parallelize = (function ()
 {

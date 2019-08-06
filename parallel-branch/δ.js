@@ -1,7 +1,7 @@
 const { isArray, from: ArrayFrom } = Array;
 
-const Task = require("@cause/task");
-const Dependent = require("@cause/task/dependent");
+const Task = require("@parallel-branch/task");
+const Dependent = require("@parallel-branch/task/dependent");
 const { None } = require("@algebraic/type/optional");
 
 const { parallelize, operator, precomputed } = require("./parallelize");
@@ -30,9 +30,9 @@ const depend = (function ()
     return function depend(callee, ...invocations)
     {
         return Dependent.fromCall(
-            (succeeded, results) => succeeded ?
+            Object.assign((succeeded, results) => succeeded ?
                 callee(...results.map(task => task.value)) :
-                aggregate(results),
+                aggregate(results), { callee }),
             invocations.map(toTask), None);
     }
 })();
@@ -47,7 +47,7 @@ function taskApply(f, thisArg, args)
 }
 
 module.exports.guard = function guard(attempt, recover)
-{console.log("HERE!!!");
+{
     return Dependent.fromCall(
         (succeeded, results) =>
             succeeded ? results[0] : recover(results),
