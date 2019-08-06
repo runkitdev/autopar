@@ -33,7 +33,7 @@ module.exports = map(
             arguments: [fromFunction(fBlock), fromFunction(fHandler)]
         });
 
-        return Node.ExpressionStatement({ expression });
+        return Node.ReturnStatement({ argument: expression });
     },
 
     ConditionalExpression(expression)
