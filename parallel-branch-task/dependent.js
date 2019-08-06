@@ -18,17 +18,18 @@ const Dependent = union `Task.Dependent` (
     // state. The fact that we have created it necessarily represents that we
     // have entered it.
     data `Blocked` (
-        name            =>  Task.Identifier,
-        consequent      =>  Function,
-        waiting         =>  List(Dependency),
-        active          =>  List(Dependency),
-        successes       =>  List(Dependency),
-        failures        =>  List(Dependency),
-        ([independent]) =>  KeyPathsByName.compute (
-                                take    =>  `waiting.task.independent`,
-                                take    =>  `active.task.independent`,
-                                take    =>  `successes.task.independent`,
-                                take    =>  `failures.task.independent` ) ),
+        name                =>  Task.Identifier,
+        consequent          =>  Function,
+        waiting             =>  List(Dependency),
+        active              =>  List(Dependency),
+        successes           =>  List(Dependency),
+        failures            =>  List(Dependency),
+        ([waitingLeaves])   =>  KeyPathsByName.compute (
+                                    take    =>  `waiting.task.waitingLeaves`,
+                                    take    =>  `active.task.waitingLeaves` ),
+        ([runningLeaves])   =>  KeyPathsByName.compute (
+                                    take    =>  `waiting.task.runningLeaves`,
+                                    take    =>  `active.task.runningLeaves` ) ),
 
     // `task` might be "active" or possibly waiting itself, so it's not really
     // appropriate to call this "Running". The only thing that is true at this
@@ -39,10 +40,12 @@ const Dependent = union `Task.Dependent` (
     // failure. If we were a form of waiting, a peer failure would allow this to
     // be canceled.
     data `Unblocked` (
-        name            =>  Task.Identifier,
-        task            =>  Task,
-        ([independent]) =>  KeyPathsByName.compute (
-                                take    =>  `task.independent` ) ) );
+        name                =>  Task.Identifier,
+        task                =>  Task,
+        ([waitingLeaves])   =>  KeyPathsByName.compute (
+                                    take    =>  `task.waitingLeaves` ),
+        ([runningLeaves])   =>  KeyPathsByName.compute (
+                                    take    =>  `task.runningLeaves` ) ) );
 
 module.exports = Dependent;
 

@@ -32,7 +32,7 @@ const depend = (function ()
         return Dependent.fromCall(
             Object.assign((succeeded, results) => succeeded ?
                 callee(...results.map(task => task.value)) :
-                aggregate(results), { callee }),
+                aggregate(results), { callee: callee.name }),
             invocations.map(toTask), None);
     }
 })();
@@ -46,13 +46,13 @@ function taskApply(f, thisArg, args)
             Task.fromResolvedCall(thisArg, f, args);
 }
 
-module.exports.guard = function guard(attempt, recover)
+module.exports.guard = Task.taskReturning(function guard(attempt, recover)
 {
     return Dependent.fromCall(
         (succeeded, results) =>
             succeeded ? results[0] : recover(results),
         [attempt()], None);
-}
+});
 
 module.exports.apply = parallelize.apply;
 

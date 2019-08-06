@@ -9,13 +9,17 @@ const { KeyPathsByName } = require("@algebraic/ast/key-path");
 const Independent = union `Task.Independent` (
     data `Waiting` (
         cause => Cause(any),
-        contentAddress  => [string, `same`],
-        ([independent]) => KeyPathsByName.compute (take => `contentAddress`) ),
+        contentAddress		=>	[string, `same`],
+        ([waitingLeaves])	=>	KeyPathsByName
+									.compute (take => `contentAddress`),
+        ([runningLeaves])	=>	data.always (KeyPathsByName.None)  ),
 
     data `Running` (
         cause => Cause(any),
-        contentAddress  => [string, `same`],
-        ([independent]) => KeyPathsByName.compute (take => `contentAddress`) ) );
+        contentAddress		=>	[string, `same`],
+        ([waitingLeaves])	=>	data.always (KeyPathsByName.None),
+        ([runningLeaves])	=>	KeyPathsByName.compute (
+									take => `contentAddress`) ) );
 
 const Started = data `Task.Started` ( );
 

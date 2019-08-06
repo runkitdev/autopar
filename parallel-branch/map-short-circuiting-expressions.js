@@ -12,7 +12,7 @@ const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
 
-const { tArrowFunctionWrap, tBranching, tOperators, tGuard } = require("./templates");
+const { tArrowFunctionWrap, tBranch, tBranching, tOperators, tGuard } = require("./templates");
 
 
 module.exports = map(
@@ -33,7 +33,7 @@ module.exports = map(
             arguments: [fromFunction(fBlock), fromFunction(fHandler)]
         });
 
-        return Node.ReturnStatement({ argument: expression });
+        return Node.ReturnStatement({ argument: tBranch(expression) });
     },
 
     ConditionalExpression(expression)

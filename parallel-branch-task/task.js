@@ -21,19 +21,22 @@ Task.Failure = union `Task.Failure` (
     or      =>  Task.Failure.Aggregate );
 
 Task.Failure.Direct = data `Task.Failure.Direct` (
-    name            =>  Task.Identifier,
-    value           =>  any,
-    ([independent]) =>  data.always (KeyPathsByName.None) );
+    name                =>  Task.Identifier,
+    value               =>  any,
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
 
 Task.Failure.Aggregate = data `Task.Failure.Aggregate` (
-    name            =>  Task.Identifier,
-    failures        =>  List(Task.Failure),
-    ([independent]) =>  data.always (KeyPathsByName.None) );
+    name                =>  Task.Identifier,
+    failures            =>  List(Task.Failure),
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
 
 Task.Success = data `Task.Success` (
-    name            =>  Task.Identifier,
-    value           =>  any,
-    ([independent]) =>  data.always (KeyPathsByName.None) );
+    name                =>  Task.Identifier,
+    value               =>  any,
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
 
 Task.Completed = union `Task.Completed` (
     is  =>  Task.Success,
