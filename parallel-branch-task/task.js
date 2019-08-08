@@ -21,7 +21,7 @@ Task.Failure = union `Task.Failure` (
     or      =>  Task.Failure.Aggregate );
 
 Task.Failure.Direct = data `Task.Failure.Direct` (
-    name                =>  Task.Identifier,
+    name                =>  [Task.Identifier, Optional.None],
     value               =>  any,
     ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
     ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
@@ -47,6 +47,7 @@ Task.Completed = union `Task.Completed` (
 Task.Identifier = Optional(string);
 
 module.exports = Task;
+module.exports.Task = Task;
 
 
 const TaskReturningSymbol = Symbol("@cause/task:task-returning");

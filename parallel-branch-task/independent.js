@@ -8,26 +8,23 @@ const { KeyPathsByName } = require("@algebraic/ast/key-path");
 
 const Independent = union `Task.Independent` (
     data `Waiting` (
-        cause => Cause(any),
-        contentAddress		=>	[string, `same`],
-        ([waitingLeaves])	=>	KeyPathsByName
-									.compute (take => `contentAddress`),
-        ([runningLeaves])	=>	data.always (KeyPathsByName.None)  ),
+        callee              =>  Function,
+        contentAddress      =>  [string, `same`],
+        ([waitingLeaves])   =>  KeyPathsByName
+                                    .compute (take => `contentAddress`),
+        ([runningLeaves])   =>  data.always (KeyPathsByName.None)  ),
 
     data `Running` (
-        cause => Cause(any),
-        contentAddress		=>	[string, `same`],
-        ([waitingLeaves])	=>	data.always (KeyPathsByName.None),
-        ([runningLeaves])	=>	KeyPathsByName.compute (
-									take => `contentAddress`) ) );
-
-const Started = data `Task.Started` ( );
+        contentAddress      =>  [string, `same`],
+        ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+        ([runningLeaves])   =>  KeyPathsByName.compute (
+                                    take => `contentAddress`) ) );
 
 Independent.Waiting.update = update
-    .on(Started, (initial, event) =>
+    .on(Independent.Running, (initial, running) =>
     [
-        Independent.Running({ ...initial }),
-        [Independent.Running({ ...initial })]
+        Independent.Running({ ...initial, running }),
+        [Independent.Running({ ...initial, running })]
     ])
     .on(Task.Failure, (waiting, event) =>
         [event, [event]]);
@@ -44,31 +41,7 @@ Independent.fromResolvedCall = function (self, fUnknown, args = [])
         return Task.Failure.Direct({ value:
             Error("Passed non-function to fromResolvedCall") });
 
-    const name = fUnknown.name;
-    const start = function start (push)
-    {
-        // Even if f was known to be a Promise-returning function, it can still
-        // throw during the initial calling phase and thus not be handled by
-        // .catch.
-        (async function ()
-        {
-            push(Started);
-
-            if (process.env.TASK_DEBUG)
-                console.log("IN HERE FOR " + fUnknown);
-
-            const value = await fUnknown.apply(self, args);
-            const result = Task.Success({ name, value });
-
-            push(result);
-        })().catch(value => push(Task.Failure.Direct({ name, value })));
-    };
-
-    start.toString = function () { return (fUnknown+"").substr(0,100); }
-    start[inspect] = function () { return (fUnknown+"").substr(0,100); }
-    const cause = Cause(any)({ start });
-
-    return Independent.Waiting({ cause });
+    return Independent.Waiting({ callee: fUnknown });
 }
 
 module.exports = Independent;
