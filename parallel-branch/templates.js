@@ -20,6 +20,11 @@ exports.tOperators = fromEntries(["?:", "||", "&&"]
 
 exports.tGuard = parse.expression("δ.guard");
 
+const kGraph = parse.expression("δ.graph");
+
+exports.tGraph = nodes =>
+    Node.CallExpression({ callee: kGraph, arguments: nodes });
+
 exports.tArrowFunctionWrap = expression =>
     Node.ArrowFunctionExpression({ body: expression });
 

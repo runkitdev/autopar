@@ -24,12 +24,14 @@ const unexpected = node => fail.syntax(
 const DependCallee = parse.expression("δ.depend");
 const SuccessCallee = parse.expression("δ.success");
 
+
 const t_success = value =>
     Node.CallExpression({ callee: SuccessCallee, arguments:[value] });
 const t_successReturn = ({ argument, ...rest }) =>
     Node.ReturnStatement({ ...rest, argument: t_success(argument) });
 
-const { tApply, tBranch, tBranching, tOperators } = require("./templates");
+const { tApply, tBranch, tBranching, tOperators, tGraph } = require("./templates");
+const tBlock = body => Node.BlockStatement({ body });
 
 const mapShortCircuitingExpressions =
     require("./map-short-circuiting-expressions");
@@ -99,13 +101,11 @@ function fromFunction(functionNode)
 
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
-    const elements = dependentData.map(toSerializedTaskNode);
-
-    const blah = Node.ArrayExpression({ elements });
-//    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
+    
+    const graphCall = tGraph(dependentData.map(toSerializedTaskNode));
+    const returnStatement = Node.ReturnStatement({ argument: graphCall });
     const updatedBody =
-        Node.BlockStatement({ ...body, body:[blah] });
-
+        Node.BlockStatement({ ...body, body:[returnStatement] });
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
