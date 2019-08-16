@@ -109,7 +109,7 @@ function fromFunction(functionNode)
     const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
     
     const elements = [...statementPairs]
-        .map(([node, data]) => toSerializedTaskNode(data.dependencyBindingNames, data.dependencyStatements, node));
+        .map(([node, data]) => toSerializedTaskNode(data.dependencies, node));
     const blah = Node.ArrayExpression({ elements });
 //    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
     const updatedBody =
@@ -120,17 +120,24 @@ function fromFunction(functionNode)
     return NodeType({ ...functionNode, body: updatedBody });
 }
 
-function toSerializedTaskNode(parameters, dependencies, statement)
+function toSerializedTaskNode(dependencies, statement)
 {
     const argument = valueToExpression(statement
         .blockBindingNames
         .keySeq().toArray()
         .map(name => [name, Node.IdentifierExpression({ name })]));
     const statements = [statement, Node.ReturnStatement({ argument })];
-    const body = Node.BlockStatement({ body: statements });console.log(parameters);
-    const fExpression = Node.ArrowFunctionExpression({ body, params: parameters.map(name => Node.IdentifierPattern({ name })) });
+    const body = Node.BlockStatement({ body: statements });
 
-    return valueToExpression([dependencies, fExpression]);
+    const properties = dependencies
+        .bindingNames
+        .map(name => Node.IdentifierPattern({ name }))
+        .map(value => Node.ObjectPropertyPatternShorthand({ value }));
+    const params = [Node.ObjectPattern({ properties })];
+
+    const fExpression = Node.ArrowFunctionExpression({ body, params });
+
+    return valueToExpression([dependencies.statements, fExpression]);
 }
 
 function toFunctionBody(taskChain)
@@ -161,10 +168,13 @@ function toFunctionBody(taskChain)
     return Node.BlockStatement({ body });
 }
 
+const DependencyData = data `DependencyData` (
+    bindingNames    =>  Array,
+    statements      =>  Array );
+
 const DependentData = data `DependentData` (
     id              => number,
-    dependencyBindingNames    => Array,
-    dependencyStatements      => Array );
+    dependencies    => DependencyData );
 
 function toDependencyPairs(tasks, statements)
 {
@@ -211,18 +221,16 @@ function toDependencyPairs(tasks, statements)
             .freeVariables.keySeq()
             .map(name => [name, declarations.get(name)])
             .filter(pair => !!pair[1])
-            .toArray());
-    const dependencyBindingNames = dependencies
-        .map(dependencies => dependencies.map(([name]) => name));
-    console.log(dependencyBindingNames);
-    const dependencyStatements = dependencies
-        .map(dependencies => dependencies
-            .map(([_, statement]) => indexes.get(statement)))
-        .map(DenseIntSet.from);
+            .map(pair => [pair[0], indexes.get(pair[1])])
+            .toArray())
+        .map(pairs => [
+            pairs.map(pair => pair[0]),
+            DenseIntSet.from(pairs.map(pair => pair[1]))])
+        .map(([bindingNames, statements]) =>
+            DependencyData({ bindingNames, statements }));
+
     const toDependentPair = node => (id =>
-        [node, DependentData({ id,
-            dependencyBindingNames: dependencyBindingNames[id],
-            dependencyStatements: dependencyStatements[id] })])
+        [node, DependentData({ id, dependencies: dependencies[id] })])
         (indexes.get(node));
 
     return [tasks.map(toDependentPair), statements.map(toDependentPair)];
