@@ -109,7 +109,7 @@ function fromFunction(functionNode)
     const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
     
     const elements = [...statementPairs]
-        .map(([node, data]) => toSerializedTaskNode(data.dependencies, node));
+        .map(([node, data]) => toSerializedTaskNode(data.dependencies, data.dependents, node));
     const blah = Node.ArrayExpression({ elements });
 //    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
     const updatedBody =
@@ -120,7 +120,7 @@ function fromFunction(functionNode)
     return NodeType({ ...functionNode, body: updatedBody });
 }
 
-function toSerializedTaskNode(dependencies, statement)
+function toSerializedTaskNode(dependencies, dependents, statement)
 {
     const argument = valueToExpression(statement
         .blockBindingNames
@@ -137,7 +137,7 @@ function toSerializedTaskNode(dependencies, statement)
 
     const fExpression = Node.ArrowFunctionExpression({ body, params });
 
-    return valueToExpression([dependencies.statements, fExpression]);
+    return valueToExpression([dependencies.statements, dependents, fExpression]);
 }
 
 function toFunctionBody(taskChain)
@@ -174,7 +174,8 @@ const DependencyData = data `DependencyData` (
 
 const DependentData = data `DependentData` (
     id              => number,
-    dependencies    => DependencyData );
+    dependencies    => DependencyData,
+    dependents      => Array );
 
 function toDependencyPairs(tasks, statements)
 {
@@ -228,12 +229,36 @@ function toDependencyPairs(tasks, statements)
             DenseIntSet.from(pairs.map(pair => pair[1]))])
         .map(([bindingNames, statements]) =>
             DependencyData({ bindingNames, statements }));
+            
+    const dependents = dependencies
+        .map((data, index) => [
+            DenseIntSet.toArray(data.statements),
+            DenseIntSet.just(index)])
+        .reduce((dependents, [dependencies, dependent]) =>
+            dependencies.reduce((dependents, dependency) =>
+                dependents.update(
+                    dependency,
+                    DenseIntSet.Empty,
+                    current => DenseIntSet.union(dependent, current)),
+                dependents),
+            Map(number, DenseIntSet)());
 
     const toDependentPair = node => (id =>
-        [node, DependentData({ id, dependencies: dependencies[id] })])
+        [node, DependentData({ id, dependencies: dependencies[id], dependents:dependents.get(id, DenseIntSet.Empty) })])
         (indexes.get(node));
 
     return [tasks.map(toDependentPair), statements.map(toDependentPair)];
+}
+
+function transpose(size, rows)
+{
+    const matrix = rows.map(DenseIntSet.toArray);
+console.log(matrix);
+    for (let row = 0; row < size; ++row)
+        for (let column = 0; column < size; ++column)    
+            matrix[row][column] = matrix[column][row];
+console.log(matrix);
+    return matrix.map(DenseIntSet.from);
 }
 
 const DependencyChain = union `DependencyChain` (
