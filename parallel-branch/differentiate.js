@@ -55,13 +55,13 @@ const mapShortCircuitingExpressions =
 const isIdentifierExpression = (name, node) =>
     is (Node.IdentifierExpression, node) && node.name === name;
 
-const TaskNode = data `TaskNode` (
-    name                    => string,
-    expression              => Node.Expression,
+const BranchExpression      = data `BranchExpression` (
+    name                    =>  string,
+    expression              =>  Node.Expression,
     ([blockBindingNames])   => [KeyPathsByName,
                                 name => KeyPathsByName.just(name)],
     ([freeVariables])       => [KeyPathsByName,
-                                expression => expression.freeVariables]);
+                                expression => expression.freeVariables] );
 
 const ConcurrentNode = union `ConcurrentNode` (
     Node.BlockVariableDeclaration,
@@ -69,14 +69,10 @@ const ConcurrentNode = union `ConcurrentNode` (
     Node.ReturnStatement,
     Node.ThrowStatement,
     Node.TryStatement,
-    TaskNode );
+    BranchExpression );
 
-const DependentNode = data  `DependentNode` (
-    id              => number,
-    node            => ConcurrentNode,
-    dependencies    => DenseIntSet );
 
-const toVariableDeclaration = ({ name, expression: init }) =>
+const toVariableDeclaration = (name, init) =>
     Node.BlockVariableDeclaration(
     {
         kind: "const",
@@ -101,15 +97,10 @@ function fromFunction(functionNode)
         fromCascadingIfStatements,
         mapShortCircuitingExpressions)(bodyStatements);
 
-    const [tasks, statements] = normalizedStatements
-        .map(toTasksAndStatements)
-        .reduce((accum, [tasks, statements]) =>
-            [[...accum[0], ...tasks], [...accum[1], ...statements]],
-            [[], []]);
-    const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
-    
-    const elements = [...statementPairs]
-        .map(([node, data]) => toSerializedTaskNode(data.dependencies, data.dependents, node));
+    const taskNodes = normalizedStatements.flatMap(toTaskNodes);
+    const dependentData = toDependentData(taskNodes);
+    const elements = dependentData.map(toSerializedTaskNode);
+
     const blah = Node.ArrayExpression({ elements });
 //    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
     const updatedBody =
@@ -120,15 +111,18 @@ function fromFunction(functionNode)
     return NodeType({ ...functionNode, body: updatedBody });
 }
 
-function toSerializedTaskNode(dependencies, dependents, statement)
-{
-    const shorthands = statement
+function toSerializedTaskNode({ dependencies, dependents, node })
+{console.log(node);
+    const shorthands = node
         .blockBindingNames
         .keySeq().toArray()
         .map(name => Node.IdentifierExpression({ name }))
         .map(value => Node.ObjectPropertyShorthand({ value }));
     const argument = Node.ObjectExpression({ properties: shorthands });
-    const statements = [statement, Node.ReturnStatement({ argument })];
+    const assignment = is (BranchExpression, node) ?
+        toVariableDeclaration(node.name, node.expression) :
+        node;
+    const statements = [assignment, Node.ReturnStatement({ argument })];
     const body = Node.BlockStatement({ body: statements });
 
     const properties = dependencies
@@ -175,21 +169,15 @@ const DependencyData = data `DependencyData` (
     statements      =>  Array );
 
 const DependentData = data `DependentData` (
-    id              => number,
+    node            => ConcurrentNode,
     dependencies    => DependencyData,
     dependents      => Array );
 
-function toDependencyPairs(tasks, statements)
+function toDependentData(nodes)
 {
-    // We "sort" by just putting concurrent sources first. This is because we
-    // want them to have contiguous IDs (indexes) so that they can fit in as few
-    // slots of a DenseIntSet as possible once we remove all the non-source
-    // elements. Otherwise, we could have a bunch of empty slots for no reason.
-    const sorted = [...tasks, ...statements];
-
     // Create a mapping from each element to it's associated sorted index.
     const indexes = Map(ConcurrentNode, number)
-        (sorted.map((node, index) => [node, index]));
+        (nodes.map((node, index) => [node, index]));
 
     // We create a mapping from the binding names exposed by an element to that
     // element. So, a statement like:
@@ -207,7 +195,7 @@ function toDependencyPairs(tasks, statements)
     const declarations = Map(string, ConcurrentNode)(
         flatMap(([node, names]) =>
             names.map(name => [name, node]).toArray(),
-            sorted.map(node => [node, node.blockBindingNames.keySeq()])));
+            nodes.map(node => [node, node.blockBindingNames.keySeq()])));
 
     // We create a "map" (since the keys are contiguous indexes we just use an
     // array) of all the direct dependencies. This is otherwise known as an
@@ -219,7 +207,7 @@ function toDependencyPairs(tasks, statements)
     // that that it is defined outside this block, and so we just ignore it
     // since we can essentially treat it as a constant as it won't affect any of
     // our other calculations at all.
-    const dependencies = sorted
+    const dependencies = nodes
         .map(statement => statement
             .freeVariables.keySeq()
             .map(name => [name, declarations.get(name)])
@@ -245,11 +233,12 @@ function toDependencyPairs(tasks, statements)
                 dependents),
             Map(number, DenseIntSet)());
 
-    const toDependentPair = node => (id =>
-        [node, DependentData({ id, dependencies: dependencies[id], dependents:dependents.get(id, DenseIntSet.Empty) })])
-        (indexes.get(node));
-
-    return [tasks.map(toDependentPair), statements.map(toDependentPair)];
+    return nodes.map((node, index) => DependentData(
+    {
+        node,
+        dependencies: dependencies[index],
+        dependents: dependents.get(index, DenseIntSet.Empty)
+    }));
 }
 
 const DependencyChain = union `DependencyChain` (
@@ -294,7 +283,7 @@ function toDependencyChain(taskPairs, statementPairs, available)
 }
 
 var global_num = 0;
-function toTasksAndStatements(statement)
+function toTaskNodes(statement)
 {
     const branchKeyPaths =
         statement.freeVariables.get("branch", List(KeyPath)());
@@ -302,7 +291,7 @@ function toTasksAndStatements(statement)
         statement.freeVariables.get("branching", List(KeyPath)());
 
     if (branchKeyPaths.size <= 0 && branchingKeyPaths.size <= 0)
-        return [[], [statement]];
+        return [statement];
 
     // Branch must come first!
     // This is the worst way to do this...
@@ -326,16 +315,15 @@ function toTasksAndStatements(statement)
         const { id, init } = declarator;
 
         if (init === ancestor && is (Node.IdentifierPattern, id))
-            return [[TaskNode({ name: id.name, expression: newChild })], []];
+            return [BranchExpression({ name: id.name, expression: newChild })];
     }
 
     const name = "MADE_UP_" + (global_num++);
-    const task = TaskNode({ name, expression: newChild });
+    const task = BranchExpression({ name, expression: newChild });
     const variable = Node.IdentifierExpression({ name });
     const replaced = KeyPath.setJust(insertionPoint, keyPath, variable, statement);
-    const [tasks, statements] = toTasksAndStatements(replaced);
 
-    return [[task, ...tasks], statements];
+    return [task, ...toTaskNodes(replaced)];
 }
 
 function toArrayExpression(...elements)
