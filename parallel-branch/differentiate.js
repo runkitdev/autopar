@@ -11,6 +11,7 @@ const { List, Map, Set } = require("@algebraic/collections");
 const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
 const reachability = require("@climb/dfs-reachability");
+const valueToExpression = require("@algebraic/ast/value-to-expression");
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
@@ -28,7 +29,7 @@ const t_success = value =>
 const t_successReturn = ({ argument, ...rest }) =>
     Node.ReturnStatement({ ...rest, argument: t_success(argument) });
 
-const { tApply, tBranch, tBranching,tOperators } = require("./templates");
+const { tApply, tBranch, tBranching, tOperators } = require("./templates");
 
 const mapShortCircuitingExpressions =
     require("./map-short-circuiting-expressions");
@@ -106,13 +107,30 @@ function fromFunction(functionNode)
             [[...accum[0], ...tasks], [...accum[1], ...statements]],
             [[], []]);
     const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
-    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
+    
+    const elements = [...statementPairs]
+        .map(([node, data]) => toSerializedTaskNode(data.dependencyBindingNames, data.dependencyStatements, node));
+    const blah = Node.ArrayExpression({ elements });
+//    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
     const updatedBody =
-        Node.BlockStatement({ ...body, ...toFunctionBody(dependencyChain) });
+        Node.BlockStatement({ ...body, body:[blah] });
 
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
+}
+
+function toSerializedTaskNode(parameters, dependencies, statement)
+{
+    const argument = valueToExpression(statement
+        .blockBindingNames
+        .keySeq().toArray()
+        .map(name => [name, Node.IdentifierExpression({ name })]));
+    const statements = [statement, Node.ReturnStatement({ argument })];
+    const body = Node.BlockStatement({ body: statements });console.log(parameters);
+    const fExpression = Node.ArrowFunctionExpression({ body, params: parameters.map(name => Node.IdentifierPattern({ name })) });
+
+    return valueToExpression([dependencies, fExpression]);
 }
 
 function toFunctionBody(taskChain)
@@ -145,7 +163,8 @@ function toFunctionBody(taskChain)
 
 const DependentData = data `DependentData` (
     id              => number,
-    dependencies    => Array );
+    dependencyBindingNames    => Array,
+    dependencyStatements      => Array );
 
 function toDependencyPairs(tasks, statements)
 {
@@ -187,37 +206,23 @@ function toDependencyPairs(tasks, statements)
     // that that it is defined outside this block, and so we just ignore it
     // since we can essentially treat it as a constant as it won't affect any of
     // our other calculations at all.
-    const directDependencies = sorted
+    const dependencies = sorted
         .map(statement => statement
             .freeVariables.keySeq()
-            .map(name => declarations.get(name))
-            .filter(declaration => !!declaration)
-            .map(declaration => indexes.get(declaration)))
+            .map(name => [name, declarations.get(name)])
+            .filter(pair => !!pair[1])
+            .toArray());
+    const dependencyBindingNames = dependencies
+        .map(dependencies => dependencies.map(([name]) => name));
+    console.log(dependencyBindingNames);
+    const dependencyStatements = dependencies
+        .map(dependencies => dependencies
+            .map(([_, statement]) => indexes.get(statement)))
         .map(DenseIntSet.from);
-
-    // Now we can calculate *all* the dependencies (including the indirect
-    // dependencies) by doing a Depth-First Reachability Search.
-    const allDependencies = reachability(directDependencies);
-
-    // This list actually has more information than we are interested in
-    // however. We only really care about the reachability to concurrent
-    // statements. Otherwise mutually valid recursive declarations would break
-    // as they would endlessly wait for eachother. So we'll go ahead and remove
-    // all the non-concurrent indexes from our reachability (dependencies)
-    // lists.
-    const statementsSet = DenseIntSet
-        .from(Array.from(statements, (_, index) => index + tasks.length));
-
-    // Additionally, this list also always lists a statement as reachable from
-    // itself. Instead of having to remember this later, we'll also go ahead and
-    // remove it now.
-    const concurrentDependencies = allDependencies
-        .map((set, index) => DenseIntSet.subtract(
-            DenseIntSet.subtract(set, statementsSet),
-            DenseIntSet.just(index)));
-
     const toDependentPair = node => (id =>
-        [node, DependentData({ id, dependencies: concurrentDependencies[id] })])
+        [node, DependentData({ id,
+            dependencyBindingNames: dependencyBindingNames[id],
+            dependencyStatements: dependencyStatements[id] })])
         (indexes.get(node));
 
     return [tasks.map(toDependentPair), statements.map(toDependentPair)];
