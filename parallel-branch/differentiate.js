@@ -122,10 +122,12 @@ function fromFunction(functionNode)
 
 function toSerializedTaskNode(dependencies, dependents, statement)
 {
-    const argument = valueToExpression(statement
+    const shorthands = statement
         .blockBindingNames
         .keySeq().toArray()
-        .map(name => [name, Node.IdentifierExpression({ name })]));
+        .map(name => Node.IdentifierExpression({ name }))
+        .map(value => Node.ObjectPropertyShorthand({ value }));
+    const argument = Node.ObjectExpression({ properties: shorthands });
     const statements = [statement, Node.ReturnStatement({ argument })];
     const body = Node.BlockStatement({ body: statements });
 
@@ -248,17 +250,6 @@ function toDependencyPairs(tasks, statements)
         (indexes.get(node));
 
     return [tasks.map(toDependentPair), statements.map(toDependentPair)];
-}
-
-function transpose(size, rows)
-{
-    const matrix = rows.map(DenseIntSet.toArray);
-console.log(matrix);
-    for (let row = 0; row < size; ++row)
-        for (let column = 0; column < size; ++column)    
-            matrix[row][column] = matrix[column][row];
-console.log(matrix);
-    return matrix.map(DenseIntSet.from);
 }
 
 const DependencyChain = union `DependencyChain` (
