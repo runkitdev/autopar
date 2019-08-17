@@ -113,27 +113,31 @@ function fromFunction(functionNode)
 
 function toSerializedTaskNode({ dependencies, dependents, node })
 {console.log(node);
-    const shorthands = node
-        .blockBindingNames
-        .keySeq().toArray()
-        .map(name => Node.IdentifierExpression({ name }))
-        .map(value => Node.ObjectPropertyShorthand({ value }));
-    const argument = Node.ObjectExpression({ properties: shorthands });
-    const assignment = is (BranchExpression, node) ?
-        toVariableDeclaration(node.name, node.expression) :
-        node;
-    const statements = [assignment, Node.ReturnStatement({ argument })];
-    const body = Node.BlockStatement({ body: statements });
+    const isBranchExpression = is (BranchExpression, node);
+    const body = isBranchExpression ?
+        node.expression :
+        Node.BlockStatement({ body: [
+            node,
+            Node.ReturnStatement({ argument:
+                Node.ObjectExpression({ properties: node
+                    .blockBindingNames
+                    .keySeq().toArray()
+                    .map(name => Node.IdentifierExpression({ name }))
+                    .map(value => Node.ObjectPropertyShorthand({ value }))
+                }) })] });
 
     const properties = dependencies
         .bindingNames
         .map(name => Node.IdentifierPattern({ name }))
         .map(value => Node.ObjectPropertyPatternShorthand({ value }));
-    const params = [Node.ObjectPattern({ properties })];
+    const params = properties.length > 0 ?
+        [Node.ObjectPattern({ properties })] :
+        [];
 
     const fExpression = Node.ArrowFunctionExpression({ body, params });
+    const name = isBranchExpression ? node.name : 0;
 
-    return valueToExpression([dependencies.statements, dependents, fExpression]);
+    return valueToExpression([name, dependencies.nodes, dependents, fExpression]);
 }
 
 function toFunctionBody(taskChain)
@@ -166,7 +170,7 @@ function toFunctionBody(taskChain)
 
 const DependencyData = data `DependencyData` (
     bindingNames    =>  Array,
-    statements      =>  Array );
+    nodes           =>  Array );
 
 const DependentData = data `DependentData` (
     node            => ConcurrentNode,
@@ -217,12 +221,12 @@ function toDependentData(nodes)
         .map(pairs => [
             pairs.map(pair => pair[0]),
             DenseIntSet.from(pairs.map(pair => pair[1]))])
-        .map(([bindingNames, statements]) =>
-            DependencyData({ bindingNames, statements }));
+        .map(([bindingNames, nodes]) =>
+            DependencyData({ bindingNames, nodes }));
             
     const dependents = dependencies
         .map((data, index) => [
-            DenseIntSet.toArray(data.statements),
+            DenseIntSet.toArray(data.nodes),
             DenseIntSet.just(index)])
         .reduce((dependents, [dependencies, dependent]) =>
             dependencies.reduce((dependents, dependency) =>
