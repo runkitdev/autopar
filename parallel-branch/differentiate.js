@@ -116,15 +116,17 @@ function toSerializedTaskNode({ dependencies, dependents, node })
     const isBranchExpression = is (BranchExpression, node);
     const body = isBranchExpression ?
         node.expression :
-        Node.BlockStatement({ body: [
-            node,
-            Node.ReturnStatement({ argument:
-                Node.ObjectExpression({ properties: node
-                    .blockBindingNames
-                    .keySeq().toArray()
-                    .map(name => Node.IdentifierExpression({ name }))
-                    .map(value => Node.ObjectPropertyShorthand({ value }))
-                }) })] });
+        is (Node.ReturnStatement, node) ?
+            node.argument :
+            Node.BlockStatement({ body: [
+                node,
+                Node.ReturnStatement({ argument:
+                    Node.ObjectExpression({ properties: node
+                        .blockBindingNames
+                        .keySeq().toArray()
+                        .map(name => Node.IdentifierExpression({ name }))
+                        .map(value => Node.ObjectPropertyShorthand({ value }))
+                    }) })] });
 
     const properties = dependencies
         .bindingNames
