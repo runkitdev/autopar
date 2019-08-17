@@ -112,11 +112,12 @@ function fromFunction(functionNode)
 }
 
 function toSerializedTaskNode({ dependencies, dependents, node })
-{console.log(node);
+{
     const isBranchExpression = is (BranchExpression, node);
+    const isReturnStatement = is (Node.ReturnStatement, node);
     const body = isBranchExpression ?
         node.expression :
-        is (Node.ReturnStatement, node) ?
+        isReturnStatement ?
             node.argument :
             Node.BlockStatement({ body: [
                 node,
@@ -137,37 +138,11 @@ function toSerializedTaskNode({ dependencies, dependents, node })
         [];
 
     const fExpression = Node.ArrowFunctionExpression({ body, params });
-    const name = isBranchExpression ? node.name : 0;
+    const name =
+        isBranchExpression ? node.name :
+        isReturnStatement ? 1 : 0;
 
     return valueToExpression([name, dependencies.nodes, dependents, fExpression]);
-}
-
-function toFunctionBody(taskChain)
-{
-    const statements = taskChain.statements
-        .map(statement =>
-            is (Node.ReturnStatement, statement) ?
-                t_successReturn(statement) : statement);
-
-    if (is (DependencyChain.End, taskChain))
-        return Node.BlockStatement({ body: statements });
-
-    const { tasks } = taskChain;
-    const thenFunction = Node.FunctionExpression(
-    {
-        id: null,
-        params: tasks.map(Node.IdentifierPattern),
-        body: toFunctionBody(taskChain.next)
-    });
-    const dependStatement = Node.CallExpression(
-    {
-        callee: DependCallee,
-        arguments: [thenFunction, ...tasks.map(task => task.expression)]
-    });
-    const returnStatement = Node.ReturnStatement({ argument: dependStatement });
-    const body = [...statements, returnStatement];
-
-    return Node.BlockStatement({ body });
 }
 
 const DependencyData = data `DependencyData` (
@@ -245,47 +220,6 @@ function toDependentData(nodes)
         dependencies: dependencies[index],
         dependents: dependents.get(index, DenseIntSet.Empty)
     }));
-}
-
-const DependencyChain = union `DependencyChain` (
-    data `End` (
-        statements  => Array ),
-    data `Parent` (
-        tasks       => [Array, []],
-        statements  => [Array, []],
-        next        => DependencyChain ) );
-
-function toDependencyChain(taskPairs, statementPairs, available)
-{
-    if (!available)
-        return DependencyChain.Parent({ next:
-            toDependencyChain(taskPairs, statementPairs, DenseIntSet.Empty) });
-
-    if (taskPairs.length === 0)
-        return DependencyChain.End({ statements:
-            statementPairs.map(([node]) => node) });
-
-    const isBlocked = pair => DenseIntSet
-        .isEmpty(DenseIntSet.subtract(pair[1].dependencies, available));
-
-    const [unblockedTaskPairs, blockedTaskPairs] =
-        partition(isBlocked, taskPairs);
-    const [unblockedStatementPairs, blockedStatementPairs] =
-        partition(isBlocked, statementPairs);
-
-    const tasks = unblockedTaskPairs.map(pair => pair[0]);
-    const statements = unblockedStatementPairs.map(pair => pair[0]);
-
-    const updatedAvailable = DenseIntSet.union(
-        available,
-        DenseIntSet.union(
-            DenseIntSet.from(unblockedTaskPairs.map(pair => pair[1].id)),
-            DenseIntSet.from(unblockedTaskPairs.map(pair => pair[1].id))));
-
-    const next = toDependencyChain(
-        blockedTaskPairs, blockedStatementPairs, updatedAvailable);
-
-    return DependencyChain.Parent({ tasks, statements, next });
 }
 
 var global_num = 0;
