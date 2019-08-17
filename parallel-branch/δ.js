@@ -5,6 +5,7 @@ const { List } = require("@algebraic/collections");
 const Task = require("@parallel-branch/task");
 const Dependent = require("@parallel-branch/task/dependent");
 const { None } = require("@algebraic/type/optional");
+const DenseIntSet = require("@algebraic/dense-int-set");
 
 const { parallelize, operator, precomputed } = require("./parallelize");
 const success = value => Task.Success({ name:"mm", value });
@@ -17,11 +18,11 @@ module.exports.parallel = function parallel(f)
     return Task.taskReturning(f);
 }
 
-module.exports.graph = function (...serialized)
+module.exports.graph = function (ready, ...serialized)
 {
-	return Task.Graph({ nodes: List(Task.Node)(serialized
+	return Task.Graph.from(ready, List(Task.Node)(serialized
 		.map(([dependencies, dependents, action, kind]) =>
-			Task.Node({ dependencies, dependents, action, kind }))) });
+			Task.Node({ dependencies, dependents, action, kind }))));
 }
 
 const depend = (function ()

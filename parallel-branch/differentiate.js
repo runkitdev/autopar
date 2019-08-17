@@ -10,7 +10,6 @@ const Node = require("@algebraic/ast/node");
 const { List, Map, Set } = require("@algebraic/collections");
 const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
-const reachability = require("@climb/dfs-reachability");
 const valueToExpression = require("@algebraic/ast/value-to-expression");
 
 const vernacular = name =>
@@ -20,15 +19,6 @@ const forbid = (...names) => fromEntries(names
         `${vernacular(name)}s are not allowed in concurrent functions.`)]));
 const unexpected = node => fail.syntax(
     `${vernacular(node.type)}s are not allowed at this point in concurrent functions.`);
-
-const DependCallee = parse.expression("δ.depend");
-const SuccessCallee = parse.expression("δ.success");
-
-
-const t_success = value =>
-    Node.CallExpression({ callee: SuccessCallee, arguments:[value] });
-const t_successReturn = ({ argument, ...rest }) =>
-    Node.ReturnStatement({ ...rest, argument: t_success(argument) });
 
 const { tApply, tBranch, tBranching, tOperators, tGraph } = require("./templates");
 const tBlock = body => Node.BlockStatement({ body });
@@ -101,8 +91,15 @@ function fromFunction(functionNode)
 
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
-    
-    const graphCall = tGraph(dependentData.map(toSerializedTaskNode));
+    const ready = DenseIntSet.from(dependentData
+        .map((data, index) => [data, index])
+        .filter(([data, index]) =>
+            DenseIntSet.isEmpty(data.dependencies.nodes))
+        .map(([_, index]) => index));
+
+    const graphCall = tGraph(
+        valueToExpression(ready),
+        dependentData.map(toSerializedTaskNode));
     const returnStatement = Node.ReturnStatement({ argument: graphCall });
     const updatedBody =
         Node.BlockStatement({ ...body, body:[returnStatement] });

@@ -22,8 +22,8 @@ exports.tGuard = parse.expression("δ.guard");
 
 const kGraph = parse.expression("δ.graph");
 
-exports.tGraph = nodes =>
-    Node.CallExpression({ callee: kGraph, arguments: nodes });
+exports.tGraph = (ready, nodes) =>
+    Node.CallExpression({ callee: kGraph, arguments: [ready, ...nodes] });
 
 exports.tArrowFunctionWrap = expression =>
     Node.ArrowFunctionExpression({ body: expression });
