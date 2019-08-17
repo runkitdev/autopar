@@ -137,12 +137,10 @@ function toSerializedTaskNode({ dependencies, dependents, node })
         [Node.ObjectPattern({ properties })] :
         [];
 
-    const fExpression = Node.ArrowFunctionExpression({ body, params });
-    const name =
-        isBranchExpression ? node.name :
-        isReturnStatement ? 1 : 0;
+    const action = Node.ArrowFunctionExpression({ body, params });
+    const kind = isBranchExpression ? node.name : isReturnStatement ? 1 : 0;
 
-    return valueToExpression([name, dependencies.nodes, dependents, fExpression]);
+    return valueToExpression([dependencies.nodes, dependents, action, kind]);
 }
 
 const DependencyData = data `DependencyData` (

@@ -19,9 +19,9 @@ module.exports.parallel = function parallel(f)
 
 module.exports.graph = function (...serialized)
 {
-	const nodes = List(any)(serialized);
-
-	return Task.Graph({ nodes });
+	return Task.Graph({ nodes: List(Task.Node)(serialized
+		.map(([dependencies, dependents, action, kind]) =>
+			Task.Node({ dependencies, dependents, action, kind }))) });
 }
 
 const depend = (function ()
