@@ -2,53 +2,97 @@ const { data, any, string } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
-const Cause = require("@cause/cause");
 const { KeyPathsByName } = require("@algebraic/ast/key-path");
+const ContentAddressOf = require("@algebraic/type/content-address-of");
+const DenseIntSet = require("@algebraic/dense-int-set");
 
 
-const Task = union `Task` (
-    is      =>  Task.Waiting,
-    or      =>  Task.Active,
-    or      =>  Task.Completed );
+const Task              =   union `Task` (
+    is                  =>  Task.Waiting,
+    or                  =>  Task.Active,
+    or                  =>  Task.Completed );
 
-Task.Active = union `Task.Active` (
-    is      =>  Dependent.Blocked,
-    or      =>  Dependent.Unblocked,
-    or      =>  Independent.Running );
+Task.Task               =   Task;
+Task.Identifier         =   Optional(string);
 
-Task.Failure = union `Task.Failure` (
-    is      =>  Task.Failure.Direct,
-    or      =>  Task.Failure.Aggregate );
+const Invocation        =   data `Invocation` (
+    callee              =>  Function,
+    arguments           =>  List(any),
+    memoizable          =>  [boolean, true] );
 
-Task.Failure.Direct = data `Task.Failure.Direct` (
+Task.Graph              =   data `Task.Graph` (
+    completed           =>  [Array, DenseIntSet.Empty],
+    nodes               =>  List(any) );
+
+/*
+Task.Pipeline           =   data `Task.Pipeline` (
+    );
+
+Task.Pipelined          =>  data `Task.Pipelined` (
+    invocation          =>  Invocation,
+    ([name])            =>  [string, invocation => invocation.callee.name],
+    ([contentAddress])  =>  [string, invocation => ContentAddressOf(invocation)] ),
+
+Task.Graph              =>  data `Task.Graph` (
+    completed           =>  DenseIntSet,
+    items               =>  List(),
+    waiting             =>  List(),
+    running             =>  List(),
+    );
+*/
+Task.Success            =   data `Task.Success` (
+    name                =>  Task.Identifier,
+    value               =>  any,
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+
+Task.Failure            =   union `Task.Failure` (
+    name                =>  Task.Identifier,
+    errors              =>  List(any),
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+
+
+
+Task.Reference          =   data `Task.Reference` (
+    name                =>  Task.Identifier,
+    contentAddress      =>  string,
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([referenceLeaves]) =>  KeyPathsByName.compute(take => `contentAddress`) );
+
+Task.Active             =   union `Task.Active` (
+    is                  =>  Dependent.Blocked,
+    or                  =>  Dependent.Unblocked,
+    or                  =>  Task.Running,
+    or                  =>  Task.Reference );
+
+Task.Completed          =   union `Task.Completed` (
+    is                  =>  Task.Success,
+    or                  =>  Task.Failure );
+
+Task.Success            =   data `Task.Success` (
+    name                =>  Task.Identifier,
+    value               =>  any,
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+
+Task.Failure            =   union `Task.Failure` (
+    is                  =>  Task.Failure.Direct,
+    or                  =>  Task.Failure.Aggregate );
+
+Task.Failure.Direct     =   data `Task.Failure.Direct` (
     name                =>  [Task.Identifier, Optional.None],
     value               =>  any,
     ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
 
-Task.Failure.Aggregate = data `Task.Failure.Aggregate` (
+Task.Failure.Aggregate  =   data `Task.Failure.Aggregate` (
     name                =>  Task.Identifier,
     failures            =>  List(Task.Failure),
     ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
-
-Task.Success = data `Task.Success` (
-    name                =>  Task.Identifier,
-    value               =>  any,
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([runningLeaves])   =>  data.always (KeyPathsByName.None) );
-
-Task.Completed = union `Task.Completed` (
-    is  =>  Task.Success,
-    or  =>  Task.Failure );
-
-
-
-Task.Identifier = Optional(string);
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
 
 module.exports = Task;
-module.exports.Task = Task;
-
 
 const TaskReturningSymbol = Symbol("@cause/task:task-returning");
 
@@ -57,8 +101,6 @@ Task.isTaskReturning = f => !!f[TaskReturningSymbol];
 
 const Dependent = require("./dependent");
 const Independent = require("./independent");
-
-Task.Waiting = Independent.Waiting;
 
 function toPromiseThen(onResolve, onReject)
 {
@@ -93,3 +135,11 @@ Task.fromAsync = function (fAsync)
 
 Task.fromAsyncCall =
 Task.fromResolvedCall = Independent.fromResolvedCall;
+
+
+/*
+Task.Waiting.from = (callee, args) =>
+    Task.Waiting({ invocation:
+        Invocation({ callee, arguments:List(any)(args) }) });
+
+*/

@@ -1,5 +1,7 @@
 const { isArray, from: ArrayFrom } = Array;
 
+const { any } = require("@algebraic/type");
+const { List } = require("@algebraic/collections");
 const Task = require("@parallel-branch/task");
 const Dependent = require("@parallel-branch/task/dependent");
 const { None } = require("@algebraic/type/optional");
@@ -13,6 +15,13 @@ module.exports.success = success;
 module.exports.parallel = function parallel(f)
 {
     return Task.taskReturning(f);
+}
+
+module.exports.graph = function (...serialized)
+{
+	const nodes = List(any)(serialized);
+
+	return Task.Graph({ nodes });
 }
 
 const depend = (function ()
