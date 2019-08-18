@@ -1,4 +1,4 @@
-const { data, any, string, or, boolean, object } = require("@algebraic/type");
+const { data, any, string, or, boolean, object, is } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List, Map } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
@@ -24,7 +24,6 @@ Task.Invocation = Invocation;
 Task.Node                   =   data `Task.Node` (
     dependencies            =>  Array /*DenseIntSet*/,
     dependents              =>  Array /*DenseIntSet*/,
-    kind                    =>  any,
     action                  =>  Function );
 
 Task.Graph                  =   data `Task.Graph` (
@@ -42,39 +41,71 @@ Task.Graph.reduce = function reduce(graph, ready)
     if (ready.length <= 0)
         return graph;
 
-    const { nodes, thisArg, scope, completed } = graph; console.log(graph);
-    const [uCompleted, uScope, dependents] = ready
-        .map(index => [index, nodes.get(index)])
-        .reduce(([completed, scope, dependents], [index, node]) =>
-        [
-            DenseIntSet.union(completed, DenseIntSet.just(index)),
-            run(node, thisArg, scope),
-            DenseIntSet.union(dependents, node.dependents)
-        ], [completed, scope, DenseIntSet.Empty]);
+    const [uGraph, dependents] = ready.reduce(run, [graph, DenseIntSet.Empty]);
+    const uCompleted = uGraph.completed;
+    const uReady = DenseIntSet
+        .toArray(dependents)
+        .filter(index => DenseIntSet
+            .isSubsetOf(uCompleted, nodes.get(index).dependencies));
 
-    return reduce(
-        Task.Graph({ ...graph, scope:uScope, completed:uCompleted }),
-        DenseIntSet
-            .toArray(dependents)
-            .map(index => [index, nodes.get(index).dependencies])
-            .filter(([index, dependencies]) =>
-                DenseIntSet.isSubsetOf(uCompleted, dependencies))
-            .map(([index]) => index));
+    return reduce(uGraph, uReady);
 }
 
-function run(node, thisArg, scope)
+const extend = (prototype, properties) =>
+    Object.assign(Object.create(prototype), properties);
+
+function run([graph, dependents], index)
 {
-    if (node.kind === 0)
-        return Object.assign(
-            Object.create(scope),
-            node.action.call(thisArg, scope));
+    if (is (Task.Success, graph))
+        return graph;
 
-    if (node.kind === 1)
-        return Object.assign(
-            Object.create(scope),
-            node.action.call(thisArg, scope));
+    try
+    {
+        const node = graph.nodes.get(index);
+        const scope = graph.scope;
+        const [type, result] = node.action.call(graph.thisArg, scope);
 
-    return scope;
+        if (type === 0)
+            return [
+                Task.Graph({ ...graph, scope: extend(scope, result) }),
+                DenseIntSet.union(dependents, node.dependents)];
+
+        // Nothing for now.
+        if (type === 1)
+            return [graph, dependents];
+
+        if (type === 2)
+            return [Task.Success({ value: result }), dependents];
+    }
+    catch (error)
+    {
+        const failures = graph.failures.push(Task.Failure({ value: error }));
+
+        return [Task.Graph({ ...graph, failures }), dependents];
+    }
+}
+
+function invoke([signature, args])
+{
+    try
+    {
+        const isMemberCall = isArray(signature);
+        const thisArg = isMemberCall ? signature[0] : void(0);
+        const f = isMemberCall ? thisArg[signature[1]] : signature;
+        const result = f.apply(thisArg, args);
+
+        if (is (Task, result))
+            return result;
+
+        if (!isThenable(result))
+            return Task.Success({ name, value: result });
+
+        return Task.Something({ value: ensureAsyncThen(result) });
+    }
+    catch (value)
+    {
+        return Task.Failure({ errors:[value] });
+    }
 }
 
 /*
@@ -99,7 +130,7 @@ Task.Success            =   data `Task.Success` (
     ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
     ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
 
-Task.Failure            =   union `Task.Failure` (
+Task.Failure            =   data `Task.Failure` (
     name                =>  Task.Identifier,
     errors              =>  List(any),
     ([waitingLeaves])   =>  data.always (KeyPathsByName.None),

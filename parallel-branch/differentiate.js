@@ -152,14 +152,13 @@ const toStartCall = (function ()
 function toSerializedTaskNode(functionBindingNames, dependentData)
 {
     const { dependencies, dependents, node } = dependentData;
-    const isBranchExpression = is (BranchExpression, node);
-    const isReturnStatement = is (Node.ReturnStatement, node);
-    const bodyStatements =
-        isReturnStatement ? [node] :
-        isBranchExpression ? [tReturn(node.expression)] :
-        [node, tReturn(tShorthandObject(
-            node.blockBindingNames.keySeq().toArray()))];
-    const body = Node.BlockStatement({ body: bodyStatements });
+    const [returnValue, ...bodyStatements] =
+        is (Node.ReturnStatement, node) ? [[2, node.argument]] :
+        is (BranchExpression, node) ? [[1, node.expression]] :
+        [[0, tShorthandObject(node.blockBindingNames.keySeq())], node];
+    const body = tBlock([
+        ...bodyStatements,
+        tReturn(valueToExpression(returnValue))]);
     const presentFunctionBindingNames = functionBindingNames
         .filter(name => node.freeVariables.has(name))
     const bindingNames =
@@ -168,9 +167,8 @@ function toSerializedTaskNode(functionBindingNames, dependentData)
         [tShorthandPattern(bindingNames)] :
         [];
     const action = Node.FunctionExpression({ body, params });
-    const kind = isBranchExpression ? node.name : isReturnStatement ? 1 : 0;
 
-    return valueToExpression([dependencies.nodes, dependents, action, kind]);
+    return valueToExpression([dependencies.nodes, dependents, action]);
 }
 
 const DependencyData = data `DependencyData` (

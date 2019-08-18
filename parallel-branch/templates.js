@@ -43,10 +43,13 @@ const tShorthandPattern = names =>
 
 exports.tShorthandPattern = tShorthandPattern;
 
+const toArray = iterable =>
+    Array.isArray(iterable) ? iterable : iterable.toArray();
 const tShorthandObject = names =>
-    Node.ObjectExpression({ properties: names
-        .map(name => Node.IdentifierExpression({ name }))
-        .map(value => Node.ObjectPropertyShorthand({ value })) });
+    Node.ObjectExpression({ properties:
+        toArray(names)
+            .map(name => Node.IdentifierExpression({ name }))
+            .map(value => Node.ObjectPropertyShorthand({ value })) });
 
 exports.tShorthandObject = tShorthandObject;
 
