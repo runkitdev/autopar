@@ -36,33 +36,19 @@ const tConst = (name, init) =>
 
 exports.tConst = tConst;
 
-const tShorthandObject = names =>
+const tShorthandPattern = names =>
     Node.ObjectPattern({ properties: names
         .map(name => Node.IdentifierPattern({ name }))
         .map(value => Node.ObjectPropertyPatternShorthand({ value })) });
 
-const kStart = parse.expression("δ.start");
-const kLocalNodes = parse.expression("nodes");
+exports.tShorthandPattern = tShorthandPattern;
 
-exports.tStartFunction = function (functionNode, ready)
-{
-    const initialScope = tShorthandObject(functionNode
-        .params
-        .reduce((bindingNames, parameter) =>
-            bindingNames.concat(parameter.bindingNames.keySeq()),
-            Set(string)())
-        .toArray());
-    const args = [kLocalNodes, initialScope, ready];
-    const start = Node.CallExpression({ callee: kStart, arguments: args });
-    const returnStatement = Node.ReturnStatement({ argument: start });
-    const body = Node.BlockStatement({ body: [returnStatement] });
-    const FunctionNode =
-        type.of(functionNode) === Node.ArrowFunctionExpression ?
-        Node.ArrowFunctionExpression :
-        Node.FunctionExpression;
+const tShorthandObject = names =>
+    Node.ObjectExpression({ properties: names
+        .map(name => Node.IdentifierExpression({ name }))
+        .map(value => Node.ObjectPropertyShorthand({ value })) });
 
-    return FunctionNode({ ...functionNode, body });
-}
+exports.tShorthandObject = tShorthandObject;
 
 const kGraph = parse.expression("δ.start");
 

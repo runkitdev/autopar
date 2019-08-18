@@ -25,13 +25,14 @@ module.exports.nodes = function (...serialized)
 			Task.Node({ dependencies, dependents, action, kind })));
 }
 
-module.exports.start = function (nodes, scope, ready)
+module.exports.start = function (nodes, thisArg, scope, ready)
 {
 	return Task.Graph.from(
         nodes,
-        DenseIntSet.Empty,
+        thisArg,
         Object.assign(Object.create(null), scope),
-        ready);
+        ready,
+        DenseIntSet.Empty);
 }
 
 const depend = (function ()

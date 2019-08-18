@@ -20,8 +20,18 @@ const forbid = (...names) => fromEntries(names
 const unexpected = node => fail.syntax(
     `${vernacular(node.type)}s are not allowed at this point in concurrent functions.`);
 
-const { tApply, tBranch, tBranching, tOperators, tConst, tNodes, tStartFunction} = require("./templates");
+const { tApply, tBranch, tBranching, tOperators, tConst, tShorthandObject, tShorthandPattern } = require("./templates");
+
 const tBlock = body => Node.BlockStatement({ body });
+const tReturn = argument => Node.ReturnStatement({ argument });
+const tCall = (callee, args) =>
+    Node.CallExpression({ callee, arguments: args });
+const ExpressionType = type => type === Node.ArrowFunctionExpression ?
+    Node.ArrowFunctionExpression :
+    Node.FunctionExpression;
+
+const kToTaskNodes = parse.expression("δ.nodes");
+
 
 const mapShortCircuitingExpressions =
     require("./map-short-circuiting-expressions");
@@ -93,15 +103,29 @@ function fromFunction(functionNode)
             .filter(([data, index]) =>
                 DenseIntSet.isEmpty(data.dependencies.nodes))
             .map(([_, index]) => index)));
-    const start = tStartFunction(functionNode, ready);
-    const body = Node.BlockStatement({ body:
-    [
-        tNodes(dependentData.map(toSerializedTaskNode)),
-        Node.ReturnStatement({ argument: start })
-    ]});
-    const callee = Node.ArrowFunctionExpression({ body });
 
-    return Node.CallExpression({ callee, arguments:[] });
+    const functionBindingNames = getFunctionBindingNames(functionNode);
+    const start = toStartCall(functionBindingNames, ready);
+
+    const FunctionType = ExpressionType(type.of(functionNode));
+    const trueFunction =
+        FunctionType({ ...functionNode, body: tBlock([tReturn(start)]) });
+
+    const nodesDeclaration = tConst("nodes",
+        tCall(kToTaskNodes, dependentData.map(data =>
+            toSerializedTaskNode(functionBindingNames, data))));
+
+    const fSetup = Node.ArrowFunctionExpression({ body:
+        tBlock([nodesDeclaration, tReturn(trueFunction)]) });
+
+    return Node.CallExpression({ callee:fSetup, arguments:[] });
+}
+
+function getFunctionBindingNames({ id, params })
+{
+    return params.reduce((bindingNames, parameter) =>
+        bindingNames.concat(parameter.bindingNames.keySeq()),
+        Set(string)(id ? [id.name] : [])).toArray();
 }
 
 function getBodyAsStatments({ body })
@@ -111,33 +135,39 @@ function getBodyAsStatments({ body })
         body.body;
 }
 
-function toSerializedTaskNode({ dependencies, dependents, node })
+const toStartCall = (function ()
 {
+    const kStart = parse.expression("δ.start");
+    const kLocalNodes = parse.expression("nodes");
+    const kThis = Node.ThisExpression();
+
+    return function toStartCall(functionBindingNames, ready)
+    {
+        const initialScope = tShorthandObject(functionBindingNames);
+
+        return tCall(kStart, [kLocalNodes, kThis, initialScope, ready]);
+    }
+})();
+
+function toSerializedTaskNode(functionBindingNames, dependentData)
+{
+    const { dependencies, dependents, node } = dependentData;
     const isBranchExpression = is (BranchExpression, node);
     const isReturnStatement = is (Node.ReturnStatement, node);
-    const body = isBranchExpression ?
-        node.expression :
-        isReturnStatement ?
-            node.argument :
-            Node.BlockStatement({ body: [
-                node,
-                Node.ReturnStatement({ argument:
-                    Node.ObjectExpression({ properties: node
-                        .blockBindingNames
-                        .keySeq().toArray()
-                        .map(name => Node.IdentifierExpression({ name }))
-                        .map(value => Node.ObjectPropertyShorthand({ value }))
-                    }) })] });
-
-    const properties = dependencies
-        .bindingNames
-        .map(name => Node.IdentifierPattern({ name }))
-        .map(value => Node.ObjectPropertyPatternShorthand({ value }));
-    const params = properties.length > 0 ?
-        [Node.ObjectPattern({ properties })] :
+    const bodyStatements =
+        isReturnStatement ? [node] :
+        isBranchExpression ? [tReturn(node.expression)] :
+        [node, tReturn(tShorthandObject(
+            node.blockBindingNames.keySeq().toArray()))];
+    const body = Node.BlockStatement({ body: bodyStatements });
+    const presentFunctionBindingNames = functionBindingNames
+        .filter(name => node.freeVariables.has(name))
+    const bindingNames =
+        [...dependencies.bindingNames, ...presentFunctionBindingNames];
+    const params = bindingNames.length > 0 ?
+        [tShorthandPattern(bindingNames)] :
         [];
-
-    const action = Node.ArrowFunctionExpression({ body, params });
+    const action = Node.FunctionExpression({ body, params });
     const kind = isBranchExpression ? node.name : isReturnStatement ? 1 : 0;
 
     return valueToExpression([dependencies.nodes, dependents, action, kind]);
