@@ -1,6 +1,6 @@
 const { data, any, string, or, boolean, object } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
-const { List } = require("@algebraic/collections");
+const { List, Map } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const { KeyPathsByName } = require("@algebraic/ast/key-path");
 const ContentAddressOf = require("@algebraic/type/content-address-of");
@@ -28,37 +28,38 @@ Task.Node                   =   data `Task.Node` (
     action                  =>  Function );
 
 Task.Graph                  =   data `Task.Graph` (
-    scope                   =>  [object, Object.create(null)],
+    nodes                   =>  List(Task.Node),
+    thisArg                 =>  any,
+    scope                   =>  object,
     completed               =>  [Array, DenseIntSet.Empty],
-    nodes                   =>  List(Task.Node)/*,
-    open                    =>  Map(string, string),
-    failures                =>  List(Task.Failure)*/ );
-/*
-Task.Graph.State            =>  data `Task.Graph.State` (
-    scope                   =>  [any, Object.create(null)],
-    completed               =>  [Array, DenseIntSet.Empty],
-    
-    )*/
+    open                    =>  [Map(string, string), Map(string, string)()],
+    failures                =>  [List(Task.Failure), List(Task.Failure)()] );
 
-Task.Graph.from = function (nodes, thisArg, scope, ready, completed)
+
+
+Task.Graph.reduce = function reduce(graph, ready)
 {
-    const [uCompleted, uScope, dependents] = DenseIntSet
-        .toArray(ready)
+    if (ready.length <= 0)
+        return graph;
+
+    const { nodes, thisArg, scope, completed } = graph; console.log(graph);
+    const [uCompleted, uScope, dependents] = ready
         .map(index => [index, nodes.get(index)])
-        .reduce(([completed, scope, dependents], [index, node]) => [
+        .reduce(([completed, scope, dependents], [index, node]) =>
+        [
             DenseIntSet.union(completed, DenseIntSet.just(index)),
             run(node, thisArg, scope),
             DenseIntSet.union(dependents, node.dependents)
         ], [completed, scope, DenseIntSet.Empty]);
-    const uReady = DenseIntSet.from(DenseIntSet
-        .toArray(dependents)
-        .map(index => [index, nodes.get(index).dependencies])
-        .filter(([index, dependencies]) =>
-            DenseIntSet.isSubsetOf(uCompleted, dependencies)));
-console.log(uScope);
-    return DenseIntSet.isEmpty(uReady) ?
-        Task.Graph({ nodes, scope:uScope, completed:uCompleted }) :
-        Task.Graph.run(nodes, thisArg, uScope, uReady, uCompleted);
+
+    return reduce(
+        Task.Graph({ ...graph, scope:uScope, completed:uCompleted }),
+        DenseIntSet
+            .toArray(dependents)
+            .map(index => [index, nodes.get(index).dependencies])
+            .filter(([index, dependencies]) =>
+                DenseIntSet.isSubsetOf(uCompleted, dependencies))
+            .map(([index]) => index));
 }
 
 function run(node, thisArg, scope)

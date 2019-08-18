@@ -97,12 +97,11 @@ function fromFunction(functionNode)
 
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
-    const ready = valueToExpression(
-        DenseIntSet.from(dependentData
-            .map((data, index) => [data, index])
-            .filter(([data, index]) =>
-                DenseIntSet.isEmpty(data.dependencies.nodes))
-            .map(([_, index]) => index)));
+    const ready = valueToExpression(dependentData
+        .map((data, index) => [data, index])
+        .filter(([data, index]) =>
+            DenseIntSet.isEmpty(data.dependencies.nodes))
+        .map(([_, index]) => index));
 
     const functionBindingNames = getFunctionBindingNames(functionNode);
     const start = toStartCall(functionBindingNames, ready);
@@ -111,12 +110,13 @@ function fromFunction(functionNode)
     const trueFunction =
         FunctionType({ ...functionNode, body: tBlock([tReturn(start)]) });
 
+    const useStrict = Node.StringLiteral({ value: "use strict" });
     const nodesDeclaration = tConst("nodes",
         tCall(kToTaskNodes, dependentData.map(data =>
             toSerializedTaskNode(functionBindingNames, data))));
 
     const fSetup = Node.ArrowFunctionExpression({ body:
-        tBlock([nodesDeclaration, tReturn(trueFunction)]) });
+        tBlock([useStrict, nodesDeclaration, tReturn(trueFunction)]) });
 
     return Node.CallExpression({ callee:fSetup, arguments:[] });
 }
