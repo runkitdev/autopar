@@ -1,4 +1,4 @@
-const { data, any, string, or, boolean } = require("@algebraic/type");
+const { data, any, string, or, boolean, object } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
@@ -28,18 +28,26 @@ Task.Node                   =   data `Task.Node` (
     action                  =>  Function );
 
 Task.Graph                  =   data `Task.Graph` (
+    scope                   =>  [object, Object.create(null)],
+    completed               =>  [Array, DenseIntSet.Empty],
+    nodes                   =>  List(Task.Node)/*,
+    open                    =>  Map(string, string),
+    failures                =>  List(Task.Failure)*/ );
+/*
+Task.Graph.State            =>  data `Task.Graph.State` (
     scope                   =>  [any, Object.create(null)],
     completed               =>  [Array, DenseIntSet.Empty],
-    nodes                   =>  List(Task.Node) );
+    
+    )*/
 
-Task.Graph.from = function (nodes, completed, scope, ready)
+Task.Graph.from = function (nodes, thisArg, scope, ready, completed)
 {
     const [uCompleted, uScope, dependents] = DenseIntSet
         .toArray(ready)
         .map(index => [index, nodes.get(index)])
         .reduce(([completed, scope, dependents], [index, node]) => [
             DenseIntSet.union(completed, DenseIntSet.just(index)),
-            Object.assign(Object.create(scope), node.action(scope)),
+            run(node, thisArg, scope),
             DenseIntSet.union(dependents, node.dependents)
         ], [completed, scope, DenseIntSet.Empty]);
     const uReady = DenseIntSet.from(DenseIntSet
@@ -47,10 +55,25 @@ Task.Graph.from = function (nodes, completed, scope, ready)
         .map(index => [index, nodes.get(index).dependencies])
         .filter(([index, dependencies]) =>
             DenseIntSet.isSubsetOf(uCompleted, dependencies)));
-
+console.log(uScope);
     return DenseIntSet.isEmpty(uReady) ?
         Task.Graph({ nodes, scope:uScope, completed:uCompleted }) :
-        Task.Graph.run(uReady, nodes, uCompleted, uScope);
+        Task.Graph.run(nodes, thisArg, uScope, uReady, uCompleted);
+}
+
+function run(node, thisArg, scope)
+{
+    if (node.kind === 0)
+        return Object.assign(
+            Object.create(scope),
+            node.action.call(thisArg, scope));
+
+    if (node.kind === 1)
+        return Object.assign(
+            Object.create(scope),
+            node.action.call(thisArg, scope));
+
+    return scope;
 }
 
 /*
