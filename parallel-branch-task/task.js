@@ -1,4 +1,4 @@
-const { data, any, string } = require("@algebraic/type");
+const { data, any, string, or, boolean } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
@@ -16,13 +16,42 @@ Task.Task               =   Task;
 Task.Identifier         =   Optional(string);
 
 const Invocation        =   data `Invocation` (
+    thisArg             =>  any,
     callee              =>  Function,
     arguments           =>  List(any),
     memoizable          =>  [boolean, true] );
+Task.Invocation = Invocation;
+Task.Node                   =   data `Task.Node` (
+    dependencies            =>  Array /*DenseIntSet*/,
+    dependents              =>  Array /*DenseIntSet*/,
+    kind                    =>  any,
+    action                  =>  Function );
 
-Task.Graph              =   data `Task.Graph` (
-    completed           =>  [Array, DenseIntSet.Empty],
-    nodes               =>  List(any) );
+Task.Graph                  =   data `Task.Graph` (
+    scope                   =>  [any, Object.create(null)],
+    completed               =>  [Array, DenseIntSet.Empty],
+    nodes                   =>  List(Task.Node) );
+
+Task.Graph.from = function (nodes, completed, scope, ready)
+{
+    const [uCompleted, uScope, dependents] = DenseIntSet
+        .toArray(ready)
+        .map(index => [index, nodes.get(index)])
+        .reduce(([completed, scope, dependents], [index, node]) => [
+            DenseIntSet.union(completed, DenseIntSet.just(index)),
+            Object.assign(Object.create(scope), node.action(scope)),
+            DenseIntSet.union(dependents, node.dependents)
+        ], [completed, scope, DenseIntSet.Empty]);
+    const uReady = DenseIntSet.from(DenseIntSet
+        .toArray(dependents)
+        .map(index => [index, nodes.get(index).dependencies])
+        .filter(([index, dependencies]) =>
+            DenseIntSet.isSubsetOf(uCompleted, dependencies)));
+
+    return DenseIntSet.isEmpty(uReady) ?
+        Task.Graph({ nodes, scope:uScope, completed:uCompleted }) :
+        Task.Graph.run(uReady, nodes, uCompleted, uScope);
+}
 
 /*
 Task.Pipeline           =   data `Task.Pipeline` (

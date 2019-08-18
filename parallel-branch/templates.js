@@ -1,5 +1,6 @@
 const fromEntries = require("@climb/from-entries");
-const { is } = require("@algebraic/type");
+const { is, string, type } = require("@algebraic/type");
+const { Set } = require("@algebraic/collections");
 
 const Node = require("@algebraic/ast/node");
 const parse = require("@algebraic/ast/parse");
@@ -20,7 +21,50 @@ exports.tOperators = fromEntries(["?:", "||", "&&"]
 
 exports.tGuard = parse.expression("δ.guard");
 
-const kGraph = parse.expression("δ.graph");
+const kNodes = parse.expression("δ.nodes");
+
+exports.tNodes = nodes =>
+    tConst("nodes", Node.CallExpression({ callee: kNodes, arguments: nodes }));
+
+const tConst = (name, init) =>
+    Node.BlockVariableDeclaration(
+    {
+        kind: "const",
+        declarators: [Node.VariableDeclarator
+            ({ id: Node.IdentifierPattern({ name }), init })]
+    });
+
+exports.tConst = tConst;
+
+const tShorthandObject = names =>
+    Node.ObjectPattern({ properties: names
+        .map(name => Node.IdentifierPattern({ name }))
+        .map(value => Node.ObjectPropertyPatternShorthand({ value })) });
+
+const kStart = parse.expression("δ.start");
+const kLocalNodes = parse.expression("nodes");
+
+exports.tStartFunction = function (functionNode, ready)
+{
+    const initialScope = tShorthandObject(functionNode
+        .params
+        .reduce((bindingNames, parameter) =>
+            bindingNames.concat(parameter.bindingNames.keySeq()),
+            Set(string)())
+        .toArray());
+    const args = [kLocalNodes, initialScope, ready];
+    const start = Node.CallExpression({ callee: kStart, arguments: args });
+    const returnStatement = Node.ReturnStatement({ argument: start });
+    const body = Node.BlockStatement({ body: [returnStatement] });
+    const FunctionNode =
+        type.of(functionNode) === Node.ArrowFunctionExpression ?
+        Node.ArrowFunctionExpression :
+        Node.FunctionExpression;
+
+    return FunctionNode({ ...functionNode, body });
+}
+
+const kGraph = parse.expression("δ.start");
 
 exports.tGraph = (ready, nodes) =>
     Node.CallExpression({ callee: kGraph, arguments: [ready, ...nodes] });

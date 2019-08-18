@@ -20,7 +20,7 @@ const forbid = (...names) => fromEntries(names
 const unexpected = node => fail.syntax(
     `${vernacular(node.type)}s are not allowed at this point in concurrent functions.`);
 
-const { tApply, tBranch, tBranching, tOperators, tGraph } = require("./templates");
+const { tApply, tBranch, tBranching, tOperators, tConst, tNodes, tStartFunction} = require("./templates");
 const tBlock = body => Node.BlockStatement({ body });
 
 const mapShortCircuitingExpressions =
@@ -78,34 +78,37 @@ module.exports = fromFunction;
 
 function fromFunction(functionNode)
 {
-    const { body } = functionNode;
-    const bodyStatements = is (Node.Expression, body) ?
-        [Node.ReturnStatement({ argument: body })] : body.body;
-
     const normalizedStatements = pipe(
         hoistFunctionDeclarations,
         removeEmptyStatements,
         separateVariableDeclarations,
         fromCascadingIfStatements,
-        mapShortCircuitingExpressions)(bodyStatements);
+        mapShortCircuitingExpressions)(getBodyAsStatments(functionNode));
 
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
-    const ready = DenseIntSet.from(dependentData
-        .map((data, index) => [data, index])
-        .filter(([data, index]) =>
-            DenseIntSet.isEmpty(data.dependencies.nodes))
-        .map(([_, index]) => index));
+    const ready = valueToExpression(
+        DenseIntSet.from(dependentData
+            .map((data, index) => [data, index])
+            .filter(([data, index]) =>
+                DenseIntSet.isEmpty(data.dependencies.nodes))
+            .map(([_, index]) => index)));
+    const start = tStartFunction(functionNode, ready);
+    const body = Node.BlockStatement({ body:
+    [
+        tNodes(dependentData.map(toSerializedTaskNode)),
+        Node.ReturnStatement({ argument: start })
+    ]});
+    const callee = Node.ArrowFunctionExpression({ body });
 
-    const graphCall = tGraph(
-        valueToExpression(ready),
-        dependentData.map(toSerializedTaskNode));
-    const returnStatement = Node.ReturnStatement({ argument: graphCall });
-    const updatedBody =
-        Node.BlockStatement({ ...body, body:[returnStatement] });
-    const NodeType = type.of(functionNode);
+    return Node.CallExpression({ callee, arguments:[] });
+}
 
-    return NodeType({ ...functionNode, body: updatedBody });
+function getBodyAsStatments({ body })
+{
+    return is (Node.Expression, body) ?
+        [Node.ReturnStatement({ argument: body })] :
+        body.body;
 }
 
 function toSerializedTaskNode({ dependencies, dependents, node })

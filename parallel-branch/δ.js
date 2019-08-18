@@ -18,11 +18,20 @@ module.exports.parallel = function parallel(f)
     return Task.taskReturning(f);
 }
 
-module.exports.graph = function (ready, ...serialized)
+module.exports.nodes = function (...serialized)
 {
-	return Task.Graph.from(ready, List(Task.Node)(serialized
+	return List(Task.Node)(serialized
 		.map(([dependencies, dependents, action, kind]) =>
-			Task.Node({ dependencies, dependents, action, kind }))));
+			Task.Node({ dependencies, dependents, action, kind })));
+}
+
+module.exports.start = function (nodes, scope, ready)
+{
+	return Task.Graph.from(
+        nodes,
+        DenseIntSet.Empty,
+        Object.assign(Object.create(null), scope),
+        ready);
 }
 
 const depend = (function ()
