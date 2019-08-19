@@ -1,3 +1,4 @@
+const until = require("@climb/until");
 const { data, any, string, or, boolean, object, is, number } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List, Map } = require("@algebraic/collections");
@@ -29,17 +30,62 @@ Task.Node                   =   data `Task.Node` (
 
 Task.Definition             =   data `Task.Definition` (
     instructions            =>  List(Task.Node),
-    entrypoints             =>  List(number) );
+    entrypoints             =>  Array );
 
 Task.Continuation           =   data `Task.Continuation` (
     definition              =>  Task.Definition,
     scope                   =>  object,
-    unblocked               =>  List(number),
+    unblocked               =>  [Array, DenseIntSet.Empty],//List(number),
     completed               =>  [Array, DenseIntSet.Empty],
     active                  =>  [Map(string, string), Map(string, string)()],
     errors                  =>  [List(any), List(any)()] );
 
 
+
+Task.Continuation.update = function update(continuation, isolate)
+{
+    if (DenseIntSet.isEmpty(continuation.unblocked))
+        return [continuation, isolate];
+
+    return until(
+        ([continuation]) => DenseIntSet.isEmpty(continuation.unblocked),
+        something,
+        [continuation, isolate]);
+}
+
+function something([continuation, isolate])
+{
+    const { instructions } = continuation.definition;
+    const [first, unblocked] = DenseIntSet.first(continuation.unblocked);
+
+    const { scope, thisArg } = continuation;
+    const instruction = instructions.get(first);
+    const [type, value] = instruction.action.call(thisArg, scope);
+
+    if (type === 0)
+    {
+        const uScope = extend(scope, value);
+        const uCompleted = DenseIntSet.add(first, continuation.completed);
+        const uUnblocked = DenseIntSet.reduce(
+            (unblocked, index) =>
+                DenseIntSet.isSubsetOf(uCompleted,
+                    instructions.get(index).dependencies) ?
+                DenseIntSet.add(index, unblocked) :
+                unblocked,
+            instruction.dependents,
+            unblocked);
+        const uContinuation = Task.Continuation({
+            ...continuation,
+            completed:uCompleted,
+            unblocked:uUnblocked });
+
+        return [uContinuation, isolate];
+    }
+    
+    return [Task.Continuation({
+            ...continuation,
+            unblocked }), isolate];
+}
 
 // memos, concurrency, running
 /*

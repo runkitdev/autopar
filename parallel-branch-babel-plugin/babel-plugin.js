@@ -59,13 +59,10 @@ function FunctionExit(path, state)
 
         if (functionNode.type === "FunctionDeclaration")
         {
-            const functionExpression =
-                state.toParallel({ ...babelNode, type: "FunctionExpression" });
-
             path.remove();
-            path.scope.push({ id: parallel.id, kind:"let", init: functionExpression });
+            path.scope.push({ id: functionNode.id, kind:"let", init:babelNode });
         }
         else
-            path.replaceWith(state.toParallel(babelNode));
+            path.replaceWith(babelNode);
     }
 };

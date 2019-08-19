@@ -18,12 +18,11 @@ module.exports.parallel = function parallel(f)
     return Task.taskReturning(f);
 }
 
-module.exports.define = function (initiallyUnblocked, ...serialized)
+module.exports.define = function (entrypoints, ...serialized)
 {
 	const instructions = List(Task.Node)(serialized
 		.map(([dependencies, dependents, action]) =>
 			Task.Node({ dependencies, dependents, action })));
-	const entrypoints = List(number)(initiallyUnblocked);
 
 	return Task.Definition({ entrypoints, instructions });
 }

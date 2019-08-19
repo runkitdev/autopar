@@ -100,7 +100,7 @@ function fromFunction(functionNode)
 
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
-    const initiallyUnblocked = valueToExpression(dependentData
+    const initiallyUnblocked = DenseIntSet.from(dependentData
         .map((data, index) => [data, index])
         .filter(([data, index]) =>
             DenseIntSet.isEmpty(data.dependencies.nodes))
@@ -117,7 +117,7 @@ function fromFunction(functionNode)
     const useStrict = Node.StringLiteral({ value: "use strict" });
     const definitionDeclaration = tConst("definition", tCall(kDefine,
     [
-        initiallyUnblocked,
+        valueToExpression(initiallyUnblocked),
         ...dependentData.map(data =>
             toSerializedTaskNode(functionBindingNames, data))
     ]));
