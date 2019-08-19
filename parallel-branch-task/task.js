@@ -57,17 +57,17 @@ const extend = (prototype, properties) =>
 function run([graph, dependents], index)
 {
     if (is (Task.Success, graph))
-        return graph;
+        return [graph, dependents];
 
     try
     {
         const node = graph.nodes.get(index);
         const scope = graph.scope;
-        const [type, result] = node.action.call(graph.thisArg, scope);
+        const [type, value] = node.action.call(graph.thisArg, scope);
 
         if (type === 0)
             return [
-                Task.Graph({ ...graph, scope: extend(scope, result) }),
+                Task.Graph({ ...graph, scope: extend(scope, value) }),
                 DenseIntSet.union(dependents, node.dependents)];
 
         // Nothing for now.
@@ -75,7 +75,7 @@ function run([graph, dependents], index)
             return [graph, dependents];
 
         if (type === 2)
-            return [Task.Success({ value: result }), dependents];
+            return [Task.Success({ name:"", value }), dependents];
     }
     catch (error)
     {
