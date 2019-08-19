@@ -145,13 +145,13 @@ function getBodyAsStatments({ body })
 function toSerializedTaskNode(functionBindingNames, dependentData)
 {
     const { dependencies, dependents, node } = dependentData;
-    const [returnValue, ...bodyStatements] =
-        is (Node.ReturnStatement, node) ? [[2, node.argument]] :
-        is (BranchExpression, node) ? [[1, node.expression]] :
-        [[0, tShorthandObject(node.blockBindingNames.keySeq())], node];
-    const body = tBlock([
-        ...bodyStatements,
-        tReturn(valueToExpression(returnValue))]);
+    const [opcode, ...bodyStatements] =
+        is (BranchExpression, node) ?
+            [2, tReturn(valueToExpression([node.name, node.expression]))] :
+        is (Node.ReturnStatement, node) ?
+            [1, node] :
+        [0, node, tReturn(tShorthandObject(node.blockBindingNames.keySeq()))];
+    const body = tBlock(bodyStatements);
     const presentFunctionBindingNames = functionBindingNames
         .filter(name => node.freeVariables.has(name))
     const bindingNames =
@@ -159,9 +159,9 @@ function toSerializedTaskNode(functionBindingNames, dependentData)
     const params = bindingNames.length > 0 ?
         [tShorthandPattern(bindingNames)] :
         [];
-    const action = Node.FunctionExpression({ body, params });
+    const execute = Node.FunctionExpression({ body, params });
 
-    return valueToExpression([dependencies.nodes, dependents, action]);
+    return valueToExpression([opcode, dependencies.nodes, dependents, execute]);
 }
 
 const DependencyData = data `DependencyData` (

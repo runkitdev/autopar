@@ -1,5 +1,5 @@
 const until = require("@climb/until");
-const { data, any, string, or, boolean, object, is, number } = require("@algebraic/type");
+const { data, any, string, or, boolean, object, is, number, array } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List, Map } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
@@ -27,10 +27,15 @@ Task.Node                   =   data `Task.Node` (
     dependents              =>  Array /*DenseIntSet*/,
     action                  =>  Function );
 
+Task.Instruction            =   data `Task.Instruction` (
+    opcode                  =>  number,
+    dependencies            =>  Array /*DenseIntSet*/,
+    dependents              =>  Array /*DenseIntSet*/,
+    execute                 =>  Function );
 
 Task.Definition             =   data `Task.Definition` (
-    instructions            =>  List(Task.Node),
-    entrypoints             =>  Array );
+    instructions            =>  array(Task.Instruction),
+    entrypoints             =>  Array);
 
 Task.Continuation           =   data `Task.Continuation` (
     definition              =>  Task.Definition,
@@ -39,6 +44,14 @@ Task.Continuation           =   data `Task.Continuation` (
     completed               =>  [Array, DenseIntSet.Empty],
     active                  =>  [Map(string, string), Map(string, string)()],
     errors                  =>  [List(any), List(any)()] );
+
+
+Task.Instruction.deserialize = function (serialized)
+{
+    const [opcode, dependencies, dependents, execute] = serialized;
+
+    return Task.Instruction({ opcode, dependencies, dependents, execute });
+}
 
 
 
@@ -59,7 +72,7 @@ function something([continuation, isolate])
     const [first, unblocked] = DenseIntSet.first(continuation.unblocked);
 
     const { scope, thisArg } = continuation;
-    const instruction = instructions.get(first);
+    const instruction = instructions[first];
     const [type, value] = instruction.action.call(thisArg, scope);
 
     if (type === 0)
@@ -69,7 +82,7 @@ function something([continuation, isolate])
         const uUnblocked = DenseIntSet.reduce(
             (unblocked, index) =>
                 DenseIntSet.isSubsetOf(uCompleted,
-                    instructions.get(index).dependencies) ?
+                    instructions[index].dependencies) ?
                 DenseIntSet.add(index, unblocked) :
                 unblocked,
             instruction.dependents,
