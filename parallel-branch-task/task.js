@@ -72,35 +72,44 @@ function run([graph, dependents], index)
 
         // Nothing for now.
         if (type === 1)
-            return [graph, dependents];
+        {
+//            const result = invoke(value);
 
-        if (type === 2)
-            return [Task.Success({ name:"", value }), dependents];
+            return [graph, dependents];
+        }
+
+        //if (type === 2)
+        return [Task.Success({ name:"", value }), dependents];
     }
     catch (error)
     {
-        const failures = graph.failures.push(Task.Failure({ value: error }));
+        const failure = Task.Failure({ errors: List(any)([error]) });
+        const failures = graph.failures.push(failure);
 
         return [Task.Graph({ ...graph, failures }), dependents];
     }
 }
 
-function invoke([signature, args])
+function invoke(graph, [signature, args])
 {
     try
     {
         const isMemberCall = isArray(signature);
         const thisArg = isMemberCall ? signature[0] : void(0);
         const f = isMemberCall ? thisArg[signature[1]] : signature;
-        const result = f.apply(thisArg, args);
+        const value = f.apply(thisArg, args);
+        //const memoizable = ...;
 
-        if (is (Task, result))
-            return result;
+        if (is (Task, value))
+            return [false, result];
 
-        if (!isThenable(result))
-            return Task.Success({ name, value: result });
+        if (!isThenable(value))
+            return [false, Task.Success({ name, value })];
 
-        return Task.Something({ value: ensureAsyncThen(result) });
+        const id = Invocation();
+        const promise = ensureAsyncThen(value);
+
+        return [promise, Task.Reference({ id })];
     }
     catch (value)
     {
