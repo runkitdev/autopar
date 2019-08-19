@@ -1,4 +1,4 @@
-const { data, any, string, or, boolean, object, is } = require("@algebraic/type");
+const { data, any, string, or, boolean, object, is, number } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List, Map } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
@@ -26,31 +26,39 @@ Task.Node                   =   data `Task.Node` (
     dependents              =>  Array /*DenseIntSet*/,
     action                  =>  Function );
 
-Task.Graph                  =   data `Task.Graph` (
-    nodes                   =>  List(Task.Node),
-    thisArg                 =>  any,
+
+Task.Definition             =   data `Task.Definition` (
+    instructions            =>  List(Task.Node),
+    entrypoints             =>  List(number) );
+
+Task.Continuation           =   data `Task.Continuation` (
+    definition              =>  Task.Definition,
     scope                   =>  object,
+    unblocked               =>  List(number),
     completed               =>  [Array, DenseIntSet.Empty],
-    open                    =>  [Map(string, string), Map(string, string)()],
-    failures                =>  [List(Task.Failure), List(Task.Failure)()] );
+    active                  =>  [Map(string, string), Map(string, string)()],
+    errors                  =>  [List(any), List(any)()] );
 
 
 
-Task.Graph.reduce = function reduce(graph, ready)
+// memos, concurrency, running
+/*
+Task.Graph.reduce = function reduce(graph, isolate, ready)
 {
     if (ready.length <= 0)
-        return graph;
+        return [graph, isolate];
 
-    const [uGraph, dependents] = ready.reduce(run, [graph, DenseIntSet.Empty]);
+    const [uGraph, uIsolate, dependents] = ready
+        .reduce(run, [graph, isolate, DenseIntSet.Empty]);
     const uCompleted = uGraph.completed;
     const uReady = DenseIntSet
         .toArray(dependents)
         .filter(index => DenseIntSet
             .isSubsetOf(uCompleted, nodes.get(index).dependencies));
 
-    return reduce(uGraph, uReady);
+    return reduce(uGraph, uReady, uIsolate);
 }
-
+*/
 const extend = (prototype, properties) =>
     Object.assign(Object.create(prototype), properties);
 

@@ -1,6 +1,6 @@
 const { isArray, from: ArrayFrom } = Array;
 
-const { any } = require("@algebraic/type");
+const { any, number } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const Task = require("@parallel-branch/task");
 const Dependent = require("@parallel-branch/task/dependent");
@@ -18,20 +18,25 @@ module.exports.parallel = function parallel(f)
     return Task.taskReturning(f);
 }
 
-module.exports.nodes = function (...serialized)
+module.exports.define = function (initiallyUnblocked, ...serialized)
 {
-	return List(Task.Node)(serialized
-		.map(([dependencies, dependents, action, kind]) =>
-			Task.Node({ dependencies, dependents, action, kind })));
+	const instructions = List(Task.Node)(serialized
+		.map(([dependencies, dependents, action]) =>
+			Task.Node({ dependencies, dependents, action })));
+	const entrypoints = List(number)(initiallyUnblocked);
+
+	return Task.Definition({ entrypoints, instructions });
 }
 
-module.exports.start = function (nodes, thisArg, pScope, ready)
+module.exports.construct = function (definition, thisArg, pScope)
 {
 	const scope = Object.assign(Object.create(null), pScope);
-	const graph = Task.Graph({ nodes, thisArg, scope });
+	const unblocked = definition.entrypoints;
 
-	return Task.Graph.reduce(graph, ready);
+	return Task.Continuation({ definition, unblocked, thisArg, scope });
 }
+
+
 
 const depend = (function ()
 {

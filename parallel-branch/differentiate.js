@@ -30,7 +30,10 @@ const ExpressionType = type => type === Node.ArrowFunctionExpression ?
     Node.ArrowFunctionExpression :
     Node.FunctionExpression;
 
-const kToTaskNodes = parse.expression("δ.nodes");
+const kThis = Node.ThisExpression();
+const kDefine = parse.expression("δ.define");
+const kConstruct = parse.expression("δ.construct");
+const kDefinition = parse.expression("definition");
 
 
 const mapShortCircuitingExpressions =
@@ -60,10 +63,10 @@ const isIdentifierExpression = (name, node) =>
 const BranchExpression      = data `BranchExpression` (
     name                    =>  string,
     expression              =>  Node.Expression,
-    ([blockBindingNames])   => [KeyPathsByName,
-                                name => KeyPathsByName.just(name)],
-    ([freeVariables])       => [KeyPathsByName,
-                                expression => expression.freeVariables] );
+    ([blockBindingNames])   =>  [KeyPathsByName,
+                                    name => KeyPathsByName.just(name)],
+    ([freeVariables])       =>  [KeyPathsByName,
+                                    expression => expression.freeVariables] );
 
 const ConcurrentNode = union `ConcurrentNode` (
     Node.BlockVariableDeclaration,
@@ -97,26 +100,30 @@ function fromFunction(functionNode)
 
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
-    const ready = valueToExpression(dependentData
+    const initiallyUnblocked = valueToExpression(dependentData
         .map((data, index) => [data, index])
         .filter(([data, index]) =>
             DenseIntSet.isEmpty(data.dependencies.nodes))
         .map(([_, index]) => index));
 
     const functionBindingNames = getFunctionBindingNames(functionNode);
-    const start = toStartCall(functionBindingNames, ready);
+    const initialScope = tShorthandObject(functionBindingNames);
+    const constructCall = tCall(kConstruct, [kDefinition, kThis, initialScope]);
 
     const FunctionType = ExpressionType(type.of(functionNode));
-    const trueFunction =
-        FunctionType({ ...functionNode, body: tBlock([tReturn(start)]) });
+    const trueFunction = FunctionType({ ...functionNode,
+            body: tBlock([tReturn(constructCall)]) });
 
     const useStrict = Node.StringLiteral({ value: "use strict" });
-    const nodesDeclaration = tConst("nodes",
-        tCall(kToTaskNodes, dependentData.map(data =>
-            toSerializedTaskNode(functionBindingNames, data))));
+    const definitionDeclaration = tConst("definition", tCall(kDefine,
+    [
+        initiallyUnblocked,
+        ...dependentData.map(data =>
+            toSerializedTaskNode(functionBindingNames, data))
+    ]));
 
     const fSetup = Node.ArrowFunctionExpression({ body:
-        tBlock([useStrict, nodesDeclaration, tReturn(trueFunction)]) });
+        tBlock([useStrict, definitionDeclaration, tReturn(trueFunction)]) });
 
     return Node.CallExpression({ callee:fSetup, arguments:[] });
 }
@@ -134,20 +141,6 @@ function getBodyAsStatments({ body })
         [Node.ReturnStatement({ argument: body })] :
         body.body;
 }
-
-const toStartCall = (function ()
-{
-    const kStart = parse.expression("δ.start");
-    const kLocalNodes = parse.expression("nodes");
-    const kThis = Node.ThisExpression();
-
-    return function toStartCall(functionBindingNames, ready)
-    {
-        const initialScope = tShorthandObject(functionBindingNames);
-
-        return tCall(kStart, [kLocalNodes, kThis, initialScope, ready]);
-    }
-})();
 
 function toSerializedTaskNode(functionBindingNames, dependentData)
 {
