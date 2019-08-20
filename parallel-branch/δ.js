@@ -25,12 +25,12 @@ module.exports.define = function (entrypoints, ...serialized)
 	return Task.Definition({ entrypoints, instructions });
 }
 
-module.exports.construct = function (definition, thisArg, pScope)
+module.exports.call = function (definition, thisArg, initialBindings)
 {
-	const scope = Object.assign(Object.create(null), pScope);
-	const unblocked = definition.entrypoints;
+	const bindings = Object.assign(Object.create(null), initialBindings);
+	const scope = Task.Scope({ thisArg, bindings });
 
-	return Task.Continuation({ definition, unblocked, thisArg, scope });
+	return Task.Called({ definition, scope });
 }
 
 

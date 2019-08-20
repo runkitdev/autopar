@@ -23,6 +23,11 @@ const Invocation        =   data `Invocation` (
     memoizable          =>  [boolean, true] );
 Task.Invocation = Invocation;
 
+Task.Isolate = data `Task.Isolate` (
+    entrypoint  =>  any,
+    concurrency =>  number,
+    running     =>  [Map(string, Promise), Map(string, Promise)()] ),
+
 Task.Instruction            =   data `Task.Instruction` (
     opcode                  =>  number,
     address                 =>  number,
@@ -32,22 +37,29 @@ Task.Instruction            =   data `Task.Instruction` (
 
 Task.Definition             =   data `Task.Definition` (
     instructions            =>  array(Task.Instruction),
-    entrypoints             =>  Array);
+    entrypoints             =>  Array );
+
+Task.Scope                  =   data `Task.Scope` (
+    thisArg                 =>  any,
+    bindings                =>  object );
+
+Task.Called                 =   data `Task.Called` (
+    definition              =>  Task.Definition,
+    scope                   =>  Task.Scope );
+
+Task.Continuation           =   data `Task.Continuation` (
+    instructions            =>  array(Task.Instruction),
+    scope                   =>  Task.Scope,
+    queued                  =>  [List(Task.Reference), List(Task.Reference)()],
+    completed               =>  [Array, DenseIntSet.Empty],
+    active                  =>  [Map(string, string), Map(string, string)()],
+    errors                  =>  [List(any), List(any)()] );
 
 Task.Reference              =   data `Task.Reference` (
     name                    =>  string,
     invocation              =>  Invocation,
     ([contentAddress])      =>  [string, invocation =>
                                     getContentAddressOf(invocation)] );
-
-Task.Continuation           =   data `Task.Continuation` (
-    definition              =>  Task.Definition,
-    scope                   =>  object,
-    queued                  =>  [List(Task.Reference), List(Task.Reference)()],
-    unblocked               =>  [Array, DenseIntSet.Empty],//List(number),
-    completed               =>  [Array, DenseIntSet.Empty],
-    active                  =>  [Map(string, string), Map(string, string)()],
-    errors                  =>  [List(any), List(any)()] );
 
 
 Task.Instruction.deserialize = function (serialized, address)
@@ -58,60 +70,61 @@ Task.Instruction.deserialize = function (serialized, address)
     return Task.Instruction(fields);
 }
 
-Task.Continuation.update = function update(continuation, isolate)
+Task.Continuation.start = function (isolate, { definition, scope })
 {
-    if (DenseIntSet.isEmpty(continuation.unblocked))
-        return [continuation, isolate];
+    const { entrypoints, instructions } = definition;
+    const continuation = Task.Continuation({ instructions, scope });
 
-    return until(
-        ([, task]) =>
-            !is (Task.Continuation, task) ||
-            DenseIntSet.isEmpty(task.unblocked),
-        something,
-        [isolate, continuation]);
+    return Task.Continuation.update(isolate, continuation, entrypoints);
 }
 
-function something([isolate, continuation])
+Task.Continuation.update = function update(isolate, continuation, unblocked)
 {
-    if (is (Task.Success, continuation))
-        return [isolate, continuation];
+    const [uIsolate, uContinuation, uUnblocked] = until(
+        ([,, unblocked]) => DenseIntSet.isEmpty(unblocked),
+        ([isolate, continuation, unblocked]) =>
+        {
+            // We can get success with running stuff...
+            if (is (Task.Success, continuation))
+                return [isolate, continuation, DenseIntSet.Empty];
 
-    const [first, uUnblocked] = DenseIntSet.first(continuation.unblocked);
-    const instruction = continuation.definition.instructions[first];
-    const operation = [step, complete, branch][instruction.opcode];
+            const [address, restUnblocked] = DenseIntSet.first(unblocked);
+            const instruction = continuation.instructions[address];
+            const operation = [step, complete, branch][instruction.opcode];
+            const [uIsolate, uContinuation, dependents] =
+                operation(isolate, continuation, instruction);
+            const uUnblocked = DenseIntSet.union(restUnblocked, dependents);
 
-    return operation(isolate, continuation, instruction);
+            return [uIsolate, uContinuation, uUnblocked];
+        }, [isolate, continuation, unblocked]);
+
+    return [uIsolate, uContinuation, uUnblocked];
 }
 
 function step(isolate, continuation, instruction)
-{
-    const { scope } = continuation;
-    const { instructions } = continuation.definition;
+{console.log("HERE!!!");
+    const { scope, completed, instructions } = continuation;
     const uScope = extend(scope, evaluate(continuation, instruction));
-    const uCompleted = DenseIntSet.add(address, continuation.completed);
-    const uUnblocked = DenseIntSet.reduce(
+    const uCompleted = DenseIntSet.add(address, completed);
+    const uContinuation = Task
+        .Continuation({ ...continuation, scope:uScope, completed:uCompleted });
+    const unblocked = DenseIntSet.reduce(
         (unblocked, address) =>
             DenseIntSet.isSubsetOf(uCompleted,
                 instructions[address].dependencies) ?
             DenseIntSet.add(address, unblocked) :
             unblocked,
-        instruction.dependents,
-        DenseIntSet.remove(instruction.address, continuation.unblocked));
+        DenseIntSet.Empty,
+        instruction.dependents);
 
-    return [isolate, Task.Continuation(
-    {
-        ...continuation,
-        scope:uScope,
-        completed:uCompleted,
-        unblocked:uUnblocked
-    })];
+    return [isolate, uContinuation, unblocked];
 }
 
 function complete(isolate, continuation, instruction)
 {
     const value = evaluate(continuation, instruction);
 
-    return [isolate, Task.Success({ name:"DONE", value })];
+    return [isolate, Task.Success({ name:"DONE", value }), DenseIntSet.Empty];
 }
 
 function branch(isolate, continuation, instruction)
@@ -304,13 +317,13 @@ Task.Failure            =   data `Task.Failure` (
     ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
 
 
-
+/*
 Task.Reference          =   data `Task.Reference` (
     name                =>  Task.Identifier,
     contentAddress      =>  string,
     ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
     ([referenceLeaves]) =>  KeyPathsByName.compute(take => `contentAddress`) );
-
+*/
 Task.Active             =   union `Task.Active` (
     is                  =>  Dependent.Blocked,
     or                  =>  Dependent.Unblocked,

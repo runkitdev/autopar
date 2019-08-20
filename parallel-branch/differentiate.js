@@ -32,7 +32,7 @@ const ExpressionType = type => type === Node.ArrowFunctionExpression ?
 
 const kThis = Node.ThisExpression();
 const kDefine = parse.expression("δ.define");
-const kConstruct = parse.expression("δ.construct");
+const kCall = parse.expression("δ.call");
 const kDefinition = parse.expression("definition");
 
 
@@ -108,11 +108,11 @@ function fromFunction(functionNode)
 
     const functionBindingNames = getFunctionBindingNames(functionNode);
     const initialScope = tShorthandObject(functionBindingNames);
-    const constructCall = tCall(kConstruct, [kDefinition, kThis, initialScope]);
+    const call = tCall(kCall, [kDefinition, kThis, initialScope]);
 
     const FunctionType = ExpressionType(type.of(functionNode));
-    const trueFunction = FunctionType({ ...functionNode,
-            body: tBlock([tReturn(constructCall)]) });
+    const trueFunction =
+        FunctionType({ ...functionNode, body: tBlock([tReturn(call)]) });
 
     const useStrict = Node.StringLiteral({ value: "use strict" });
     const definitionDeclaration = tConst("definition", tCall(kDefine,

@@ -23,8 +23,8 @@ module.exports = function run(entrypoint, concurrency = 1)
     return new Promise(function (resolve, reject)
     {
         let isolate = Isolate({ entrypoint, concurrency });
-        
-        console.log(Task.Continuation.update(entrypoint, isolate));
+        const continuation = Task.Continuation.start(isolate, entrypoint);
+        console.log(continuation);//Task.Continuation.update(entrypoint, isolate));
 /*        const finish = task =>
             is(Task.Success, task) ?
                 resolve(task.value) : reject(task);
