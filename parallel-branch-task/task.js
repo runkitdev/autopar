@@ -4,7 +4,7 @@ const Optional = require("@algebraic/type/optional");
 const { List, Map } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const { KeyPathsByName } = require("@algebraic/ast/key-path");
-const ContentAddressOf = require("@algebraic/type/content-address-of");
+const getContentAddressOf = require("@algebraic/type/content-address-of");
 const DenseIntSet = require("@algebraic/dense-int-set");
 
 
@@ -22,13 +22,10 @@ const Invocation        =   data `Invocation` (
     arguments           =>  List(any),
     memoizable          =>  [boolean, true] );
 Task.Invocation = Invocation;
-Task.Node                   =   data `Task.Node` (
-    dependencies            =>  Array /*DenseIntSet*/,
-    dependents              =>  Array /*DenseIntSet*/,
-    action                  =>  Function );
 
 Task.Instruction            =   data `Task.Instruction` (
     opcode                  =>  number,
+    address                 =>  number,
     dependencies            =>  Array /*DenseIntSet*/,
     dependents              =>  Array /*DenseIntSet*/,
     execute                 =>  Function );
@@ -37,23 +34,29 @@ Task.Definition             =   data `Task.Definition` (
     instructions            =>  array(Task.Instruction),
     entrypoints             =>  Array);
 
+Task.Reference              =   data `Task.Reference` (
+    name                    =>  string,
+    invocation              =>  Invocation,
+    ([contentAddress])      =>  [string, invocation =>
+                                    getContentAddressOf(invocation)] );
+
 Task.Continuation           =   data `Task.Continuation` (
     definition              =>  Task.Definition,
     scope                   =>  object,
+    queued                  =>  [List(Task.Reference), List(Task.Reference)()],
     unblocked               =>  [Array, DenseIntSet.Empty],//List(number),
     completed               =>  [Array, DenseIntSet.Empty],
     active                  =>  [Map(string, string), Map(string, string)()],
     errors                  =>  [List(any), List(any)()] );
 
 
-Task.Instruction.deserialize = function (serialized)
+Task.Instruction.deserialize = function (serialized, address)
 {
     const [opcode, dependencies, dependents, execute] = serialized;
+    const fields = { opcode, dependencies, dependents, execute, address };
 
-    return Task.Instruction({ opcode, dependencies, dependents, execute });
+    return Task.Instruction(fields);
 }
-
-
 
 Task.Continuation.update = function update(continuation, isolate)
 {
@@ -61,19 +64,111 @@ Task.Continuation.update = function update(continuation, isolate)
         return [continuation, isolate];
 
     return until(
-        ([continuation]) => DenseIntSet.isEmpty(continuation.unblocked),
+        ([, task]) =>
+            !is (Task.Continuation, task) ||
+            DenseIntSet.isEmpty(task.unblocked),
         something,
-        [continuation, isolate]);
+        [isolate, continuation]);
 }
 
-function something([continuation, isolate])
+function something([isolate, continuation])
 {
-    const { instructions } = continuation.definition;
-    const [first, unblocked] = DenseIntSet.first(continuation.unblocked);
+    if (is (Task.Success, continuation))
+        return [isolate, continuation];
 
-    const { scope, thisArg } = continuation;
-    const instruction = instructions[first];
-    const [type, value] = instruction.action.call(thisArg, scope);
+    const [first, uUnblocked] = DenseIntSet.first(continuation.unblocked);
+    const instruction = continuation.definition.instructions[first];
+    const operation = [step, complete, branch][instruction.opcode];
+
+    return operation(isolate, continuation, instruction);
+}
+
+function step(isolate, continuation, instruction)
+{
+    const { scope } = continuation;
+    const { instructions } = continuation.definition;
+    const uScope = extend(scope, evaluate(continuation, instruction));
+    const uCompleted = DenseIntSet.add(address, continuation.completed);
+    const uUnblocked = DenseIntSet.reduce(
+        (unblocked, address) =>
+            DenseIntSet.isSubsetOf(uCompleted,
+                instructions[address].dependencies) ?
+            DenseIntSet.add(address, unblocked) :
+            unblocked,
+        instruction.dependents,
+        DenseIntSet.remove(instruction.address, continuation.unblocked));
+
+    return [isolate, Task.Continuation(
+    {
+        ...continuation,
+        scope:uScope,
+        completed:uCompleted,
+        unblocked:uUnblocked
+    })];
+}
+
+function complete(isolate, continuation, instruction)
+{
+    const value = evaluate(continuation, instruction);
+
+    return [isolate, Task.Success({ name:"DONE", value })];
+}
+
+function branch(isolate, continuation, instruction)
+{
+    const [name, sInvocation] = evaluate(continuation, instruction);
+    const invocation = Invocation.deserialize(sInvocation);
+    const contentAddress = getContentAddressOf(invocation);
+
+    if (isolate.running.has(contentAddress))
+    {
+        const reference = Task.Reference({ name, invocation });
+        const referenced =
+            continuation.referenced.set(contentAddress, reference);
+        const uContinuation =
+            Task.Continuation({ ...continuation, referenced });
+
+        return [isolate, uContinuation];
+    }
+
+    if (isolate.concurrency >= isolate.running.size)
+    {
+        const reference = Task.Reference({ name, invocation });
+        const queued = continuation.queued.set(contentAddress, reference);
+        const uContinuation = Task.Continuation({ ...continuation, queued });
+
+        return [isolate, continuation];
+    }
+
+    const [isPromise, task] = invoke(invocation);
+
+    return [isolate, continuation];
+}
+
+Invocation.deserialize = function ([signature, args])
+{
+    const isMemberCall = Array.isArray(signature);
+    const thisArg = isMemberCall ? signature[0] : void(0);
+    const callee = isMemberCall ? thisArg[signature[1]] : signature;
+
+    return Invocation({ callee, thisArg, arguments: List(any)(args) });
+}
+
+
+function evaluate(continuation, instruction)
+{
+    return instruction.execute.call(continuation.thisArg, continuation.scope);
+}
+
+
+
+/*
+
+
+    const { opcode, execute } = 
+    const [type, value] = execute.call(thisArg, scope);
+
+    return [step, complete, branch](continuation, instruction)
 
     if (type === 0)
     {
@@ -98,7 +193,6 @@ function something([continuation, isolate])
     return [Task.Continuation({
             ...continuation,
             unblocked }), isolate];
-}
 
 // memos, concurrency, running
 /*
@@ -157,15 +251,13 @@ function run([graph, dependents], index)
     }
 }
 
-function invoke(graph, [signature, args])
+function invoke(invocation)
 {
     try
     {
-        const isMemberCall = isArray(signature);
-        const thisArg = isMemberCall ? signature[0] : void(0);
-        const f = isMemberCall ? thisArg[signature[1]] : signature;
-        const value = f.apply(thisArg, args);
-        //const memoizable = ...;
+        const { callee, thisArg } = invocation;
+        const args = invocation.arguments.toArray();
+        const value = callee.apply(thisArg, args);
 
         if (is (Task, value))
             return [false, result];
@@ -173,7 +265,6 @@ function invoke(graph, [signature, args])
         if (!isThenable(value))
             return [false, Task.Success({ name, value })];
 
-        const id = Invocation();
         const promise = ensureAsyncThen(value);
 
         return [promise, Task.Reference({ id })];
