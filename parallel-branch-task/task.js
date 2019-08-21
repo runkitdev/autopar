@@ -1,11 +1,15 @@
 const until = require("@climb/until");
-const { data, any, string, or, boolean, object, is, number, array } = require("@algebraic/type");
+const { data, any, string, or, boolean, object, is, number, array, type } = require("@algebraic/type");
+const maybe = require("@algebraic/type/maybe");
 const Optional = require("@algebraic/type/optional");
-const { List, Map } = require("@algebraic/collections");
+const { List, Map, Set } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const { KeyPathsByName } = require("@algebraic/ast/key-path");
 const getContentAddressOf = require("@algebraic/type/content-address-of");
 const DenseIntSet = require("@algebraic/dense-int-set");
+
+const BindingName       =   string;
+const ContentAddress    =   string;
 
 
 const Task              =   union `Task` (
@@ -20,13 +24,20 @@ const Invocation        =   data `Invocation` (
     thisArg             =>  any,
     callee              =>  Function,
     arguments           =>  List(any),
-    memoizable          =>  [boolean, true] );
+    contentAddress      =>  [string, ""] );
 Task.Invocation = Invocation;
 
-Task.Isolate = data `Task.Isolate` (
-    entrypoint  =>  any,
-    concurrency =>  number,
-    running     =>  [Map(string, Promise), Map(string, Promise)()] ),
+Task.Success            =   data `Task.Success` (
+    value               =>  any,
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+
+Task.Failure            =   data `Task.Failure` (
+    name                =>  [Task.Identifier, "hi"],
+    errors              =>  List(any),
+    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
+    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+
 
 Task.Instruction            =   data `Task.Instruction` (
     opcode                  =>  number,
@@ -37,6 +48,8 @@ Task.Instruction            =   data `Task.Instruction` (
 
 Task.Definition             =   data `Task.Definition` (
     instructions            =>  array(Task.Instruction),
+    ([complete])            =>  [Array, instructions =>
+                                    DenseIntSet.inclusive(instructions.size)],
     entrypoints             =>  Array );
 
 Task.Scope                  =   data `Task.Scope` (
@@ -47,13 +60,34 @@ Task.Called                 =   data `Task.Called` (
     definition              =>  Task.Definition,
     scope                   =>  Task.Scope );
 
+// Queued -> CA -> List[References]
+// Running -> CA -> List[References]
+
+const Dependents            =   data `Dependents` (
+    addresses               =>  Array /*DenseIntSet*/,
+    bindings                =>  Set(string) );
+
 Task.Continuation           =   data `Task.Continuation` (
+    definition              =>  Task.Definition,
     instructions            =>  array(Task.Instruction),
     scope                   =>  Task.Scope,
-    queued                  =>  [List(Task.Reference), List(Task.Reference)()],
-    completed               =>  [Array, DenseIntSet.Empty],
-    active                  =>  [Map(string, string), Map(string, string)()],
-    errors                  =>  [List(any), List(any)()] );
+    completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
+
+    queued                  =>  [InvocationMap, InvocationMap()],
+    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
+    children                =>  [ContinuationMap, ContinuationMap()],
+    dependents              =>  [DependentMap, DependentMap()],
+    ([running])             =>  [boolean, (references, children) =>
+                                    references.size + children.size > 0],
+
+    errors                  =>  [List(any), List(any)()],
+    result                  =>  [maybe(any), maybe(any).nothing] );
+
+
+const ContinuationMap = Map(ContentAddress, Task.Continuation);
+const DependentMap = Map(ContentAddress, Dependents);
+const InvocationMap = Map(ContentAddress, Task.Invocation);
+
 
 Task.Reference              =   data `Task.Reference` (
     name                    =>  string,
@@ -61,6 +95,20 @@ Task.Reference              =   data `Task.Reference` (
     ([contentAddress])      =>  [string, invocation =>
                                     getContentAddressOf(invocation)] );
 
+Scope = Task.Scope;
+
+Scope.extend = function (scope, newVariables)
+{
+    const variables =
+        Object.assign(Object.create(scope.variables), newVariables);
+
+    return Scope({ ...scope, variables });
+}
+
+Task.Failure.from = function (error)
+{
+    return Task.Failure({ errors: List(any)([error]) });
+}
 
 Task.Instruction.deserialize = function (serialized, address)
 {
@@ -73,7 +121,7 @@ Task.Instruction.deserialize = function (serialized, address)
 Task.Continuation.start = function (isolate, { definition, scope })
 {
     const { entrypoints, instructions } = definition;
-    const continuation = Task.Continuation({ instructions, scope });
+    const continuation = Task.Continuation({ definition, instructions, scope });
 
     return Task.Continuation.update(isolate, continuation, entrypoints);
 }
@@ -90,7 +138,7 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
 
             const [address, restUnblocked] = DenseIntSet.first(unblocked);
             const instruction = continuation.instructions[address];
-            const operation = [step, complete, branch][instruction.opcode];
+            const operation = [step, resolve, branch][instruction.opcode];
             const [uIsolate, uContinuation, dependents] =
                 operation(isolate, continuation, instruction);
             const uUnblocked = DenseIntSet.union(restUnblocked, dependents);
@@ -98,13 +146,33 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
             return [uIsolate, uContinuation, uUnblocked];
         }, [isolate, continuation, unblocked]);
 
+    const failed =
+        continuation.errors.size > 0 &&
+        continuation.running.size <= 0;
+
+    if (failed)
+        return [uIsolate, Task.Failure({ errors }), DenseIntSet.Empty];
+
+    const complete = continuation.definition.complete;
+    const succeeded = DenseIntSet.equals(complete, uContinuation.completed);
+
+    if (succeeded)
+    {
+        return success =
+            uContinuation.result === maybe(any).nothing ?
+                Task.Success({ value: void(0) }) :
+                Task.Success({ value: uContinuation.result.value });
+
+        return [uIsolate, success, DenseIntSet.Empty];
+    }
+
     return [uIsolate, uContinuation, uUnblocked];
 }
 
 function step(isolate, continuation, instruction)
-{console.log("HERE!!!");
+{
     const { scope, completed, instructions } = continuation;
-    const uScope = extend(scope, evaluate(continuation, instruction));
+    const uScope = Scope.extend(scope, evaluate(continuation, instruction));
     const uCompleted = DenseIntSet.add(address, completed);
     const uContinuation = Task
         .Continuation({ ...continuation, scope:uScope, completed:uCompleted });
@@ -120,42 +188,119 @@ function step(isolate, continuation, instruction)
     return [isolate, uContinuation, unblocked];
 }
 
-function complete(isolate, continuation, instruction)
+function resolve(isolate, continuation, instruction)
 {
     const value = evaluate(continuation, instruction);
+    const result = maybe(any).just({ value });
+    const uContinuation = Task.Continuation({ ...continuation, result });
 
-    return [isolate, Task.Success({ name:"DONE", value }), DenseIntSet.Empty];
+    return [isolate, uContinuation, DenseIntSet.Empty];
 }
 
 function branch(isolate, continuation, instruction)
 {
+    return [isolate, continuation, DenseIntSet.Empty];
     const [name, sInvocation] = evaluate(continuation, instruction);
     const invocation = Invocation.deserialize(sInvocation);
-    const contentAddress = getContentAddressOf(invocation);
+    const reference = Task.Reference({ name, invocation });
+    const contentAddress = reference.contentAddress;
+    const Isolate = type.of(isolate);
 
-    if (isolate.running.has(contentAddress))
+    if (isolate.memoizations.has(contentAddress))
     {
-        const reference = Task.Reference({ name, invocation });
-        const referenced =
+        
+    }
+
+    if (isolate.running.has(reference.contentAddress))
+    {
+        const uReferenced =
             continuation.referenced.set(contentAddress, reference);
         const uContinuation =
-            Task.Continuation({ ...continuation, referenced });
+            Task.Continuation({ ...continuation, referenced: uReferenced });
 
-        return [isolate, uContinuation];
+        return [isolate, uContinuation, DenseIntSet.Empty];
     }
 
-    if (isolate.concurrency >= isolate.running.size)
+    if (isolate.concurrency <= isolate.running.size)
     {
-        const reference = Task.Reference({ name, invocation });
-        const queued = continuation.queued.set(contentAddress, reference);
-        const uContinuation = Task.Continuation({ ...continuation, queued });
+        const uQueued = continuation.queued.set(contentAddress, reference);
+        const uContinuation =
+            Task.Continuation({ ...continuation, queued:uQueued });
 
-        return [isolate, continuation];
+        return [isolate, uContinuation, DenseIntSet.Empty];
+    }
+    
+    const [errored, value] = invoke(invocation);
+
+    if (errored)
+    {
+        const failure = Task.Failure.from(value);
+        const uMemoizations =
+            isolate.memoizations.set(contenetAddress, failure);
+
+        const uIsolate = Isolate({ ...isolate, memoizations: uMemoizations });
+        const uContinuation = fail(continuation, contentAddress, failure);
+
+        return [uIsolate, uContinuation, DenseIntSet.Empty];
     }
 
-    const [isPromise, task] = invoke(invocation);
+    if (isThenable(value))
+    {
+        
+        const uRunning = continuation.running.set(name, reference);
+        const uContinuation =
+            Task.Continuation({ ...continuation, running: uRunning });
+    
+        
+    }
 
-    return [isolate, continuation];
+    if (!errored && isThenable(value))
+    {
+    }
+
+    if (!errored && is (Task.Called, value))
+    {
+    }
+
+
+
+    const finished = errored || !isThenable(value) && !is (Task.Called);
+    
+    
+    if (errored)
+        isolate.memoizations.
+    
+console.log("hi...");
+    const [uIsolate, task] = invoke(isolate, invocation);
+    const uRunning = continuation.running.set(name, task);
+    const uContinuation =
+        Task.Continuation({ ...continuation, running: uRunning });
+
+    return [uIsolate, uContinuation, DenseIntSet.Empty];
+}
+
+function success(continuation, success)
+{
+    
+}
+
+function fail(continuation, contentAddress, failure)
+{
+    const uErrors = continuation.errors.concat(failure.errors);
+
+    return Task.Continuation({ ...continuation, errors: uErrors });
+}
+
+function settle(continuation, result)
+{
+    if (is (Task.Failure, result))
+    {
+        const uErrors = continuation.failures.push(value);
+        const uContinuation =
+            Task.Continuation({ ...continuation, errors: uErrors });
+
+        return [uIsolate, uContinuation, DenseIntSet.Empty];
+    }
 }
 
 Invocation.deserialize = function ([signature, args])
@@ -167,15 +312,59 @@ Invocation.deserialize = function ([signature, args])
     return Invocation({ callee, thisArg, arguments: List(any)(args) });
 }
 
-
 function evaluate(continuation, instruction)
 {
     return instruction.execute.call(continuation.thisArg, continuation.scope);
 }
 
+// f() -> .Called() -> run
+// f() -> Promise -> consolidate
+// f() -> value -> store?
 
+// finished -> (with error)
+// finished -> (with success)
+// finished -> 
+
+function invoke(invocation)
+{
+    try
+    {
+        const { callee, thisArg } = invocation;
+        const args = invocation.arguments.toArray();
+        const value = callee.apply(thisArg, args);
+
+        return [true, value];
+    }
+    catch (value)
+    {
+        return [false, value];
+    }
+}
+
+async function ensureAsyncThen(thenable)
+{
+    return await thenable;
+}
+
+function isThenable(value)
+{
+    return !!value && typeof value.then === "function";
+}
+
+module.exports = Task;
+
+// update(root, [CA, value] )
+//    for_all_keys_matching(CA) -> fill out -> but on reeturn continue, etc.
+//    all-CAs I care about?
 
 /*
+
+Success/Failure
+
+Called
+value
+Promise
+
 
 
     const { opcode, execute } = 
@@ -225,144 +414,8 @@ Task.Graph.reduce = function reduce(graph, isolate, ready)
     return reduce(uGraph, uReady, uIsolate);
 }
 */
-const extend = (prototype, properties) =>
-    Object.assign(Object.create(prototype), properties);
-
-function run([graph, dependents], index)
-{
-    if (is (Task.Success, graph))
-        return [graph, dependents];
-
-    try
-    {
-        const node = graph.nodes.get(index);
-        const scope = graph.scope;
-        const [type, value] = node.action.call(graph.thisArg, scope);
-
-        if (type === 0)
-            return [
-                Task.Graph({ ...graph, scope: extend(scope, value) }),
-                DenseIntSet.union(dependents, node.dependents)];
-
-        // Nothing for now.
-        if (type === 1)
-        {
-//            const result = invoke(value);
-
-            return [graph, dependents];
-        }
-
-        //if (type === 2)
-        return [Task.Success({ name:"", value }), dependents];
-    }
-    catch (error)
-    {
-        const failure = Task.Failure({ errors: List(any)([error]) });
-        const failures = graph.failures.push(failure);
-
-        return [Task.Graph({ ...graph, failures }), dependents];
-    }
-}
-
-function invoke(invocation)
-{
-    try
-    {
-        const { callee, thisArg } = invocation;
-        const args = invocation.arguments.toArray();
-        const value = callee.apply(thisArg, args);
-
-        if (is (Task, value))
-            return [false, result];
-
-        if (!isThenable(value))
-            return [false, Task.Success({ name, value })];
-
-        const promise = ensureAsyncThen(value);
-
-        return [promise, Task.Reference({ id })];
-    }
-    catch (value)
-    {
-        return Task.Failure({ errors:[value] });
-    }
-}
 
 /*
-Task.Pipeline           =   data `Task.Pipeline` (
-    );
-
-Task.Pipelined          =>  data `Task.Pipelined` (
-    invocation          =>  Invocation,
-    ([name])            =>  [string, invocation => invocation.callee.name],
-    ([contentAddress])  =>  [string, invocation => ContentAddressOf(invocation)] ),
-
-Task.Graph              =>  data `Task.Graph` (
-    completed           =>  DenseIntSet,
-    items               =>  List(),
-    waiting             =>  List(),
-    running             =>  List(),
-    );
-*/
-Task.Success            =   data `Task.Success` (
-    name                =>  Task.Identifier,
-    value               =>  any,
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
-
-Task.Failure            =   data `Task.Failure` (
-    name                =>  Task.Identifier,
-    errors              =>  List(any),
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
-
-
-/*
-Task.Reference          =   data `Task.Reference` (
-    name                =>  Task.Identifier,
-    contentAddress      =>  string,
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  KeyPathsByName.compute(take => `contentAddress`) );
-*/
-Task.Active             =   union `Task.Active` (
-    is                  =>  Dependent.Blocked,
-    or                  =>  Dependent.Unblocked,
-    or                  =>  Task.Running,
-    or                  =>  Task.Reference );
-
-Task.Completed          =   union `Task.Completed` (
-    is                  =>  Task.Success,
-    or                  =>  Task.Failure );
-
-Task.Success            =   data `Task.Success` (
-    name                =>  Task.Identifier,
-    value               =>  any,
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
-
-Task.Failure            =   union `Task.Failure` (
-    is                  =>  Task.Failure.Direct,
-    or                  =>  Task.Failure.Aggregate );
-
-Task.Failure.Direct     =   data `Task.Failure.Direct` (
-    name                =>  [Task.Identifier, Optional.None],
-    value               =>  any,
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
-
-Task.Failure.Aggregate  =   data `Task.Failure.Aggregate` (
-    name                =>  Task.Identifier,
-    failures            =>  List(Task.Failure),
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
-
-module.exports = Task;
-
-const TaskReturningSymbol = Symbol("@cause/task:task-returning");
-
-Task.taskReturning = f => Object.assign(f, { [TaskReturningSymbol]: true });
-Task.isTaskReturning = f => !!f[TaskReturningSymbol];
-
 const Dependent = require("./dependent");
 const Independent = require("./independent");
 
@@ -374,36 +427,4 @@ function toPromiseThen(onResolve, onReject)
 function toPromiseCatch(onReject)
 {
     return require("@cause/cause/to-promise")(Object, this).catch(onReject);
-}
-
-for (const type of [
-    Independent.Waiting,
-    Independent.Running,
-    Dependent.Blocked,
-    Dependent.Unblocked,
-    //...union.components(Independent),
-    //...union.components(Dependent),
-    ...union.components(Task.Failure),
-    Task.Success])
-{
-    type.prototype.then = toPromiseThen;
-    type.prototype.catch = toPromiseCatch;
-}
-
-
-Task.fromAsync = function (fAsync)
-{
-    return Task.taskReturning((...args) =>
-        Task.fromAsyncCall(null, fAsync, args));
-}
-
-Task.fromAsyncCall =
-Task.fromResolvedCall = Independent.fromResolvedCall;
-
-
-/*
-Task.Waiting.from = (callee, args) =>
-    Task.Waiting({ invocation:
-        Invocation({ callee, arguments:List(any)(args) }) });
-
-*/
+}*/
