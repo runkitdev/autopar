@@ -65,14 +65,14 @@ function taskApply(f, thisArg, args)
             f.apply(thisArg, args) :
             Task.fromResolvedCall(thisArg, f, args);
 }
-
+/*
 module.exports.guard = Task.taskReturning(function guard(attempt, recover)
 {
     return Dependent.fromCall(
         (succeeded, results) =>
             succeeded ? results[0] : recover(results),
         [attempt()], None);
-});
+});*/
 
 module.exports.apply = parallelize.apply;
 

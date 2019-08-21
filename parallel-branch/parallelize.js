@@ -27,7 +27,7 @@ module.exports = parallelize;
 
 module.exports.parallelize = parallelize;
 
-module.exports.apply = Task.taskReturning((signature, bs, args) =>
+module.exports.apply = (signature, bs, args) =>
 {
     if (!isArray(signature))
         return parallelize(signature)(...args);
@@ -35,7 +35,7 @@ module.exports.apply = Task.taskReturning((signature, bs, args) =>
     const [object, property] = signature;
 
     return parallelize(object[property], bs).apply(object, args);
-})
+}
 
 function precomputed(f, bs, bf)
 {
@@ -54,10 +54,10 @@ function wrapped(name, bs, bf)
 {
     const bname = `[∂branching/${bs.map(b => `∂${b}`).join("")}](${name})`;
 
-    return Task.taskReturning(fNamed(bname, function (...args)
+    return fNamed(bname, function (...args)
     {
         return bf.apply(this, args);
-    }));
+    });
 }
 
 module.exports.operator = (function ()

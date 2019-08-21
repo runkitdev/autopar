@@ -49,7 +49,7 @@ Task.Instruction            =   data `Task.Instruction` (
 Task.Definition             =   data `Task.Definition` (
     instructions            =>  array(Task.Instruction),
     ([complete])            =>  [Array, instructions =>
-                                    DenseIntSet.inclusive(instructions.size)],
+                                    DenseIntSet.inclusive(instructions.length)],
     entrypoints             =>  Array );
 
 Task.Scope                  =   data `Task.Scope` (
@@ -97,12 +97,12 @@ Task.Reference              =   data `Task.Reference` (
 
 Scope = Task.Scope;
 
-Scope.extend = function (scope, newVariables)
+Scope.extend = function (scope, newBindings)
 {
-    const variables =
-        Object.assign(Object.create(scope.variables), newVariables);
+    const bindings =
+        Object.assign(Object.create(scope.bindings), newBindings);
 
-    return Scope({ ...scope, variables });
+    return Scope({ ...scope, bindings });
 }
 
 Task.Failure.from = function (error)
@@ -128,7 +128,7 @@ Task.Continuation.start = function (isolate, { definition, scope })
 
 Task.Continuation.update = function update(isolate, continuation, unblocked)
 {
-    const [uIsolate, uContinuation, uUnblocked] = until(
+    const [uIsolate, uContinuation] = until(
         ([,, unblocked]) => DenseIntSet.isEmpty(unblocked),
         ([isolate, continuation, unblocked]) =>
         {
@@ -147,33 +147,28 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
         }, [isolate, continuation, unblocked]);
 
     const failed =
-        continuation.errors.size > 0 &&
-        continuation.running.size <= 0;
+        uContinuation.errors.size > 0 &&
+        uContinuation.running.size <= 0;
 
     if (failed)
-        return [uIsolate, Task.Failure({ errors }), DenseIntSet.Empty];
+        return [uIsolate, Task.Failure({ errors })];
 
     const complete = continuation.definition.complete;
     const succeeded = DenseIntSet.equals(complete, uContinuation.completed);
-
+console.log(complete, uContinuation.completed, continuation.instructions.length);
     if (succeeded)
-    {
-        return success =
-            uContinuation.result === maybe(any).nothing ?
-                Task.Success({ value: void(0) }) :
-                Task.Success({ value: uContinuation.result.value });
+        return [uIsolate, Task.Success({ value:
+                uContinuation.result === maybe(any).nothing ?
+                void(0) : uContinuation.result.value })];
 
-        return [uIsolate, success, DenseIntSet.Empty];
-    }
-
-    return [uIsolate, uContinuation, uUnblocked];
+    return [uIsolate, uContinuation];
 }
 
 function step(isolate, continuation, instruction)
 {
     const { scope, completed, instructions } = continuation;
     const uScope = Scope.extend(scope, evaluate(continuation, instruction));
-    const uCompleted = DenseIntSet.add(address, completed);
+    const uCompleted = DenseIntSet.add(instruction.address, completed);
     const uContinuation = Task
         .Continuation({ ...continuation, scope:uScope, completed:uCompleted });
     const unblocked = DenseIntSet.reduce(
@@ -192,7 +187,10 @@ function resolve(isolate, continuation, instruction)
 {
     const value = evaluate(continuation, instruction);
     const result = maybe(any).just({ value });
-    const uContinuation = Task.Continuation({ ...continuation, result });
+    const uCompleted =
+        DenseIntSet.add(instruction.address, continuation.completed);
+    const uContinuation =
+        Task.Continuation({ ...continuation, completed:uCompleted, result });
 
     return [isolate, uContinuation, DenseIntSet.Empty];
 }
@@ -314,7 +312,9 @@ Invocation.deserialize = function ([signature, args])
 
 function evaluate(continuation, instruction)
 {
-    return instruction.execute.call(continuation.thisArg, continuation.scope);
+    const { thisArg, bindings } = continuation.scope;
+
+    return instruction.execute.call(thisArg, bindings);
 }
 
 // f() -> .Called() -> run
