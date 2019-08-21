@@ -8,9 +8,10 @@ const update = require("@cause/cause/update");
 
 
 const Isolate = data `Isolate` (
-    entrypoint  =>  any,
-    concurrency =>  number,
-    running     =>  [Map(string, Promise), Map(string, Promise)()],/*,
+    entrypoint      =>  any,
+    concurrency     =>  number,
+    running         =>  [Map(string, Promise), Map(string, Promise)()],
+    memoizations    =>  [Map(string, any), Map(string, any)()],/*,
     open        =>  List(Task),
     running     =>  Map(string, Task),
     memoized    =>  Map(string, Task),

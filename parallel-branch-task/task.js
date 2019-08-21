@@ -2,7 +2,7 @@ const until = require("@climb/until");
 const { data, any, string, or, boolean, object, is, number, array, type } = require("@algebraic/type");
 const maybe = require("@algebraic/type/maybe");
 const Optional = require("@algebraic/type/optional");
-const { List, Map, Set } = require("@algebraic/collections");
+const { List, OrderedMap, Map, Set } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const { KeyPathsByName } = require("@algebraic/ast/key-path");
 const getContentAddressOf = require("@algebraic/type/content-address-of");
@@ -23,8 +23,8 @@ Task.Identifier         =   Optional(string);
 const Invocation        =   data `Invocation` (
     thisArg             =>  any,
     callee              =>  Function,
-    arguments           =>  List(any),
-    contentAddress      =>  [string, ""] );
+    arguments           =>  List(any)/*,
+    contentAddress      =>  [string, ""]*/ );
 Task.Invocation = Invocation;
 
 Task.Success            =   data `Task.Success` (
@@ -67,6 +67,17 @@ const Dependents            =   data `Dependents` (
     addresses               =>  Array /*DenseIntSet*/,
     bindings                =>  Set(string) );
 
+Dependents.union = function (lhs, rhs)
+{
+    if (lhs === false)
+        return rhs;
+
+    const addresses = DenseIntSet.union(lhs.addresses, rhs.addresses);
+    const bindings = lhs.bindings.concat(rhs.bindings);
+
+    return Dependents({ addresses, bindings });
+}
+
 Task.Continuation           =   data `Task.Continuation` (
     definition              =>  Task.Definition,
     instructions            =>  array(Task.Instruction),
@@ -86,7 +97,7 @@ Task.Continuation           =   data `Task.Continuation` (
 
 const ContinuationMap = Map(ContentAddress, Task.Continuation);
 const DependentMap = Map(ContentAddress, Dependents);
-const InvocationMap = Map(ContentAddress, Task.Invocation);
+const InvocationMap = OrderedMap(ContentAddress, Task.Invocation);
 
 
 Task.Reference              =   data `Task.Reference` (
@@ -197,11 +208,49 @@ function resolve(isolate, continuation, instruction)
 
 function branch(isolate, continuation, instruction)
 {
-    return [isolate, continuation, DenseIntSet.Empty];
     const [name, sInvocation] = evaluate(continuation, instruction);
     const invocation = Invocation.deserialize(sInvocation);
+    const contentAddress = getContentAddressOf(invocation);
+    
+    const addresses = instruction.dependents;
+    const bindings = Set(string)([name]);
+    const dependents = Dependents({ addresses, bindings });
+
+    const uDependents = continuation.dependents
+        .update(contentAddress, false, existing =>
+            Dependents.union(existing, dependents));
+
+    if (continuation.queued.has(contentAddress) ||
+        continuation.references.has(contentAddress) ||
+        continuation.children.has(contentAddress))
+        return [isolate,
+            Task.Continuation({ ...continuation, dependents:uDependents }),
+            DenseIntSet.Empty];
+
+    const uQueued = continuation.queued.set(contentAddress, invocation);
+    const uContinuation = Task.Continuation({ ...continuation,
+        queued:uQueued,
+        dependents:uDependents });
+
+    return [isolate, uContinuation, DenseIntSet.Empty];
+
+/*
+    if (continuation.
+
+    const uQueued = continuation.queued.has(contentAddress) ?
+        continuation.queued :
+        continuation.queued.set(contentAddress, invocation);
+    const uReferences = continuation
+
+        .update()
+    
+    queued                  =>  [InvocationMap, InvocationMap()],
+    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
+    children                =>  [ContinuationMap, ContinuationMap()],
+    dependents              =>  [DependentMap, DependentMap()],
+    
     const reference = Task.Reference({ name, invocation });
-    const contentAddress = reference.contentAddress;
+
     const Isolate = type.of(isolate);
 
     if (isolate.memoizations.has(contentAddress))
@@ -274,7 +323,7 @@ console.log("hi...");
     const uContinuation =
         Task.Continuation({ ...continuation, running: uRunning });
 
-    return [uIsolate, uContinuation, DenseIntSet.Empty];
+    return [uIsolate, uContinuation, DenseIntSet.Empty];*/
 }
 
 function success(continuation, success)
