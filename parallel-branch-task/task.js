@@ -280,6 +280,16 @@ function branch(isolate, continuation, instruction)
         return [isolate, uContinuation, DenseIntSet.Empty];
     }
 
+    if (is (Task.Success, result))
+    {
+        const uMemoizations = isolate.memoizations.set(contentAddress, result);
+        const uIsolate = Δ(isolate, { memoizations: uMemoizations });
+
+        const Δbindings = { [name]: result.value };
+
+        return [uIsolate, ...updateScope(continuation, instruction, Δbindings)];
+    }
+
     return ;
 
 /*

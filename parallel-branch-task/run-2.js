@@ -22,7 +22,7 @@ const Isolate = data `Isolate` (
     settle      =>  Function*/ );
 
 
-module.exports = function run(entrypoint, concurrency = 0)
+module.exports = function run(entrypoint, concurrency = 1)
 {
     return new Promise(function (resolve, reject)
     {
