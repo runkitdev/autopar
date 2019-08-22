@@ -86,10 +86,13 @@ Task.Continuation           =   data `Task.Continuation` (
 
     queued                  =>  [InvocationMap, InvocationMap()],
     references              =>  [Set(ContentAddress), Set(ContentAddress)()],
-    children                =>  [ContinuationMap, ContinuationMap()],
+    memoizedChildren        =>  [ContinuationMap, ContinuationMap()],
+    unmemoizedChildren      =>  [List(Task.Continuation), List(Task.Continuation)()],
     dependents              =>  [DependentMap, DependentMap()],
-    ([running])             =>  [boolean, (references, children) =>
-                                    references.size + children.size > 0],
+    ([running])             =>  [boolean, (references, memoizedChildren, unmemoizedChildren) =>
+                                    references.size +
+                                    memoizedChildren.size +
+                                    unmemoizedChildren.size > 0],
 
     errors                  =>  [List(any), List(any)()],
     result                  =>  [maybe(any), maybe(any).nothing] );
@@ -162,13 +165,13 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
     const failed =
         uContinuation.errors.size > 0 &&
         !uContinuation.running;
-console.log(failed,uContinuation.errors.size > 0, uContinuation.running.size <= 0);
+
     if (failed)
         return [uIsolate, Task.Failure({ errors: uContinuation.errors })];
 
     const complete = continuation.definition.complete;
     const succeeded = DenseIntSet.equals(complete, uContinuation.completed);
-//console.log(complete, uContinuation.completed, continuation.instructions.length);
+
     if (succeeded)
         return [uIsolate, Task.Success({ value:
                 uContinuation.result === maybe(any).nothing ?
@@ -180,7 +183,7 @@ console.log(failed,uContinuation.errors.size > 0, uContinuation.running.size <= 
 function step(isolate, continuation, instruction)
 {
     const dScope = evaluate(continuation, instruction);
-console.log(updateScope(continuation, instruction, dScope)[0].scope);
+
     return [isolate, ...updateScope(continuation, instruction, dScope)];
 }
 
@@ -197,7 +200,7 @@ function resolve(isolate, continuation, instruction)
 }
 
 function branch(isolate, continuation, instruction)
-{console.log("BRANCH!");
+{
     const [name, sInvocation] = evaluate(continuation, instruction);
     const invocation = Invocation.deserialize(sInvocation);
     const contentAddress = getContentAddressOf(invocation);
@@ -228,7 +231,7 @@ function branch(isolate, continuation, instruction)
     // information.
     if (continuation.queued.has(contentAddress) ||
         continuation.references.has(contentAddress) ||
-        continuation.children.has(contentAddress))
+        continuation.memoizedChildren.has(contentAddress))
         return [isolate,
             Δ(continuation, { dependents:uDependents }),
             DenseIntSet.Empty];
@@ -269,6 +272,52 @@ function branch(isolate, continuation, instruction)
         return [uIsolate, uContinuation, DenseIntSet.Empty];
     }
 
+    if (!is (Task.Called, result))
+        return completed(isolate, continuation, instruction, name, child);
+
+    // MARK SELF AS RUNNING BEFORE-HAND!
+    const [uIsolate, child] = Task.Continuation.start(isolate, result);
+
+    if (is (Task.Continuation, child))
+    {
+        if (contentAddress === false)
+        {
+            const uUnmemoizedChildren =
+                continuation.unmemoizedChildren.push(started);
+            const uContinuation = Δ(continuation,
+                { unmemoizedChildren: uUnmemoizedChildren });
+
+            return [uIsolate, uContinuation, DenseIntSet.Empty];
+        }
+
+        // Mark running in isolate!
+        const uMemoizedChildren =
+            continuation.memoizedChildren.set(contentAddress, started);
+        const uContinuation =
+            Δ(continuation, { memoizedChildren: uMemoizedChildren });
+
+        return [uIsolate, uContinuation, DenseIntSet.Empty];
+    }
+
+    return completed(uIsolate, continuation, instruction, name, child);
+}
+
+function completed(isolate, continuation, instruction, name, result)
+{
+    if (is (Task.Failure, result))
+    {
+        const uErrors = continuation.errors.concat(result.errors);
+        const uContinuation = Δ(continuation, { errors: uErrors });
+
+        return [isolate, uContinuation, DenseIntSet.Empty];
+    }
+
+    const Δbindings = { [name]: result.value };
+
+    return [isolate, ...updateScope(continuation, instruction, Δbindings)];
+}
+
+/*
     if (is (Task.Failure, result))
     {
         const uMemoizations = isolate.memoizations.set(contentAddress, result);
@@ -284,105 +333,13 @@ function branch(isolate, continuation, instruction)
     {
         const uMemoizations = isolate.memoizations.set(contentAddress, result);
         const uIsolate = Δ(isolate, { memoizations: uMemoizations });
-
         const Δbindings = { [name]: result.value };
 
         return [uIsolate, ...updateScope(continuation, instruction, Δbindings)];
     }
 
-    return ;
+*/
 
-/*
-    if (continuation.
-
-    const uQueued = continuation.queued.has(contentAddress) ?
-        continuation.queued :
-        continuation.queued.set(contentAddress, invocation);
-    const uReferences = continuation
-
-        .update()
-
-    queued                  =>  [InvocationMap, InvocationMap()],
-    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
-    children                =>  [ContinuationMap, ContinuationMap()],
-    dependents              =>  [DependentMap, DependentMap()],
-
-    const reference = Task.Reference({ name, invocation });
-
-    const Isolate = type.of(isolate);
-
-    if (isolate.memoizations.has(contentAddress))
-    {
- 
-    }
-
-    if (isolate.running.has(reference.contentAddress))
-    {
-        const uReferenced =
-            continuation.referenced.set(contentAddress, reference);
-        const uContinuation =
-            Task.Continuation({ ...continuation, referenced: uReferenced });
-
-        return [isolate, uContinuation, DenseIntSet.Empty];
-    }
-
-    if (isolate.concurrency <= isolate.running.size)
-    {
-        const uQueued = continuation.queued.set(contentAddress, reference);
-        const uContinuation =
-            Task.Continuation({ ...continuation, queued:uQueued });
-
-        return [isolate, uContinuation, DenseIntSet.Empty];
-    }
-
-    const [errored, value] = invoke(invocation);
-
-    if (errored)
-    {
-        const failure = Task.Failure.from(value);
-        const uMemoizations =
-            isolate.memoizations.set(contenetAddress, failure);
-
-        const uIsolate = Isolate({ ...isolate, memoizations: uMemoizations });
-        const uContinuation = fail(continuation, contentAddress, failure);
-
-        return [uIsolate, uContinuation, DenseIntSet.Empty];
-    }
-
-    if (isThenable(value))
-    {
-        
-        const uRunning = continuation.running.set(name, reference);
-        const uContinuation =
-            Task.Continuation({ ...continuation, running: uRunning });
-    
-        
-    }
-
-    if (!errored && isThenable(value))
-    {
-    }
-
-    if (!errored && is (Task.Called, value))
-    {
-    }
-
-
-
-    const finished = errored || !isThenable(value) && !is (Task.Called);
-    
-    
-    if (errored)
-        isolate.memoizations.
-    
-console.log("hi...");
-    const [uIsolate, task] = invoke(isolate, invocation);
-    const uRunning = continuation.running.set(name, task);
-    const uContinuation =
-        Task.Continuation({ ...continuation, running: uRunning });
-
-    return [uIsolate, uContinuation, DenseIntSet.Empty];*/
-}
 /*
 function settle(continuation, succeeded, contentAddress)
 {
