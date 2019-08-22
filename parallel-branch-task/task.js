@@ -166,7 +166,7 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
 
     const complete = continuation.definition.complete;
     const succeeded = DenseIntSet.equals(complete, uContinuation.completed);
-console.log(complete, uContinuation.completed, continuation.instructions.length);
+//console.log(complete, uContinuation.completed, continuation.instructions.length);
     if (succeeded)
         return [uIsolate, Task.Success({ value:
                 uContinuation.result === maybe(any).nothing ?
@@ -177,21 +177,9 @@ console.log(complete, uContinuation.completed, continuation.instructions.length)
 
 function step(isolate, continuation, instruction)
 {
-    const { scope, completed, instructions } = continuation;
-    const uScope = Scope.extend(scope, evaluate(continuation, instruction));
-    const uCompleted = DenseIntSet.add(instruction.address, completed);
-    const uContinuation = Task
-        .Continuation({ ...continuation, scope:uScope, completed:uCompleted });
-    const unblocked = DenseIntSet.reduce(
-        (unblocked, address) =>
-            DenseIntSet.isSubsetOf(uCompleted,
-                instructions[address].dependencies) ?
-            DenseIntSet.add(address, unblocked) :
-            unblocked,
-        DenseIntSet.Empty,
-        instruction.dependents);
-
-    return [isolate, uContinuation, unblocked];
+    const dScope = evaluate(continuation, instruction);
+console.log(updateScope(continuation, instruction, dScope)[0].scope);
+    return [isolate, ...updateScope(continuation, instruction, dScope)];
 }
 
 function resolve(isolate, continuation, instruction)
@@ -212,6 +200,19 @@ function branch(isolate, continuation, instruction)
     const invocation = Invocation.deserialize(sInvocation);
     const contentAddress = getContentAddressOf(invocation);
     
+    // FIXME: HANDLE ERROR
+    // The simplest case is that *someone else* has already encountered this
+    // invocation, and it has been fully resolved. In this case, we essentially
+    // function identically as a synchronous instruction, and return the updated
+    // continuation.
+    if (isolate.memoizations.has(contentAddress))
+    {
+        const result = isolate.memoizations.get();
+        const Δbindings = { [name]: result.value };
+
+        return [isolate, ...updateScope(continuation, instruction, Δbindings)];
+    }
+
     const addresses = instruction.dependents;
     const bindings = Set(string)([name]);
     const dependents = Dependents({ addresses, bindings });
@@ -220,12 +221,16 @@ function branch(isolate, continuation, instruction)
         .update(contentAddress, false, existing =>
             Dependents.union(existing, dependents));
 
+    // The simplest case is that we've already encountered this invocation
+    // internally, so we only have to update the dependent information.
     if (continuation.queued.has(contentAddress) ||
         continuation.references.has(contentAddress) ||
         continuation.children.has(contentAddress))
         return [isolate,
             Task.Continuation({ ...continuation, dependents:uDependents }),
             DenseIntSet.Empty];
+
+
 
     const uQueued = continuation.queued.set(contentAddress, invocation);
     const uContinuation = Task.Continuation({ ...continuation,
@@ -325,6 +330,26 @@ console.log("hi...");
 
     return [uIsolate, uContinuation, DenseIntSet.Empty];*/
 }
+
+function updateScope(continuation, instruction, Δbindings)
+{
+    const { scope, completed, instructions } = continuation;
+    const uScope = Scope.extend(scope, Δbindings);
+    const uCompleted = DenseIntSet.add(instruction.address, completed);
+    const uContinuation = Task
+        .Continuation({ ...continuation, scope:uScope, completed:uCompleted });
+    const unblocked = DenseIntSet.reduce(
+        (unblocked, address) =>
+            DenseIntSet.isSubsetOf(uCompleted,
+                instructions[address].dependencies) ?
+            DenseIntSet.add(address, unblocked) :
+            unblocked,
+        DenseIntSet.Empty,
+        instruction.dependents);
+
+    return [uContinuation, unblocked];
+}
+
 
 function success(continuation, success)
 {
