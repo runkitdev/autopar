@@ -1,4 +1,4 @@
-const { is, data, any, number, string, union } = require("@algebraic/type");
+const { is, data, any, number, string, union, boolean } = require("@algebraic/type");
 const { List, Map, Set } = require("@algebraic/collections");
 const Task = require("./task");
 const Independent = require("./independent");
@@ -11,7 +11,10 @@ const Isolate = data `Isolate` (
     entrypoint      =>  any,
     concurrency     =>  number,
     running         =>  [Map(string, Promise), Map(string, Promise)()],
-    memoizations    =>  [Map(string, any), Map(string, any)()],/*,
+    memoizations    =>  [Map(string, any), Map(string, any)()],
+    ([hasVacancy])  =>  [boolean, (running, concurrency) =>
+                            concurrency > running.size]
+    /*,
     open        =>  List(Task),
     running     =>  Map(string, Task),
     memoized    =>  Map(string, Task),
@@ -19,7 +22,7 @@ const Isolate = data `Isolate` (
     settle      =>  Function*/ );
 
 
-module.exports = function run(entrypoint, concurrency = 1)
+module.exports = function run(entrypoint, concurrency = 0)
 {
     return new Promise(function (resolve, reject)
     {

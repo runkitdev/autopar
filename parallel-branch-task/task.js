@@ -242,11 +242,15 @@ function branch(isolate, continuation, instruction)
         return [isolate, uContinuation, DenseIntSet.Empty];
     }
 
-    const uQueued = continuation.queued.set(contentAddress, invocation);
-    const uContinuation =
-        Δ(continuation, { queued: uQueued, dependents: uDependents });
+    // Check if the isolate could support another task.
+    if (!isolate.hasVacancy)
+    {
+        const uQueued = continuation.queued.set(contentAddress, invocation);
+        const uContinuation =
+            Δ(continuation, { queued: uQueued, dependents: uDependents });
 
-    return [isolate, uContinuation, DenseIntSet.Empty];
+        return [isolate, uContinuation, DenseIntSet.Empty];
+    }
 
 /*
     if (continuation.
