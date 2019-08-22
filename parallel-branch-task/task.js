@@ -221,21 +221,30 @@ function branch(isolate, continuation, instruction)
         .update(contentAddress, false, existing =>
             Dependents.union(existing, dependents));
 
-    // The simplest case is that we've already encountered this invocation
-    // internally, so we only have to update the dependent information.
+    // The second simplest case is that we've already encountered this
+    // invocation internally, so we only have to update the dependent
+    // information.
     if (continuation.queued.has(contentAddress) ||
         continuation.references.has(contentAddress) ||
         continuation.children.has(contentAddress))
         return [isolate,
-            Task.Continuation({ ...continuation, dependents:uDependents }),
+            Δ(continuation, { dependents:uDependents }),
             DenseIntSet.Empty];
 
+    // Next we check if it's currently running, where we can't swap it in yet,
+    // so we have to add it as a reference.
+    if (isolate.running.has(contentAddress))
+    {
+        const uReferences = continuation.references.add(contentAddress);
+        const uContinuation = Δ(continuation,
+            { dependents:uDependents, references:uReferences });
 
+        return [isolate, uContinuation, DenseIntSet.Empty];
+    }
 
     const uQueued = continuation.queued.set(contentAddress, invocation);
-    const uContinuation = Task.Continuation({ ...continuation,
-        queued:uQueued,
-        dependents:uDependents });
+    const uContinuation =
+        Δ(continuation, { queued: uQueued, dependents: uDependents });
 
     return [isolate, uContinuation, DenseIntSet.Empty];
 
@@ -329,6 +338,11 @@ console.log("hi...");
         Task.Continuation({ ...continuation, running: uRunning });
 
     return [uIsolate, uContinuation, DenseIntSet.Empty];*/
+}
+
+function Δ(original, changes)
+{
+    return type.of(original)({ ...original, ...changes });
 }
 
 function updateScope(continuation, instruction, Δbindings)
