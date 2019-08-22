@@ -195,7 +195,7 @@ function resolve(isolate, continuation, instruction)
 }
 
 function branch(isolate, continuation, instruction)
-{
+{console.log("BRANCH!");
     const [name, sInvocation] = evaluate(continuation, instruction);
     const invocation = Invocation.deserialize(sInvocation);
     const contentAddress = getContentAddressOf(invocation);
@@ -251,6 +251,29 @@ function branch(isolate, continuation, instruction)
 
         return [isolate, uContinuation, DenseIntSet.Empty];
     }
+
+    // This means we can invoke.
+    const [isPromise, result] = invoke(invocation);
+
+    if (isPromise)
+    {
+        const uRunning = isolate.running.set(contentAddress, result);
+        const uIsolate = Δ(isolate, { running: uRunning });
+
+        const uReferences = continuation.references.add(contentAddress);
+        const uContinuation = Δ(continuation,
+            { dependents:uDependents, references: uReferences });
+
+        return [uIsolate, uContinuation, DenseIntSet.Empty];
+    }
+
+    if (is (Task.Failure, result))
+    {
+        const uErrors = 10;
+        return [isolate, continuation];
+    }
+
+    return ;
 
 /*
     if (continuation.
@@ -368,19 +391,6 @@ function updateScope(continuation, instruction, Δbindings)
     return [uContinuation, unblocked];
 }
 
-
-function success(continuation, success)
-{
-    
-}
-
-function fail(continuation, contentAddress, failure)
-{
-    const uErrors = continuation.errors.concat(failure.errors);
-
-    return Task.Continuation({ ...continuation, errors: uErrors });
-}
-
 function settle(continuation, result)
 {
     if (is (Task.Failure, result))
@@ -425,11 +435,17 @@ function invoke(invocation)
         const args = invocation.arguments.toArray();
         const value = callee.apply(thisArg, args);
 
-        return [true, value];
+        if (isThenable(value))
+            return [true, value];
+
+        if (is (Task.Called, value))
+            return [false, value];
+
+        return [false, Task.Success({ value })];
     }
-    catch (value)
+    catch (error)
     {
-        return [false, value];
+        return [false, Task.Failure({ errors:List(any)([error]) })];
     }
 }
 
