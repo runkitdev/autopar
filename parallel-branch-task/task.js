@@ -81,6 +81,8 @@ Dependents.union = function (lhs, rhs)
 Task.Continuation           =   data `Task.Continuation` (
     definition              =>  Task.Definition,
     instructions            =>  array(Task.Instruction),
+    UUID                    =>  or (boolean, string),
+
     scope                   =>  Task.Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
 
@@ -95,7 +97,7 @@ Task.Continuation           =   data `Task.Continuation` (
                                     unmemoizedChildren.size > 0],
 
     errors                  =>  [List(any), List(any)()],
-    result                  =>  [maybe(any), maybe(any).nothing] );
+    result                  =>  [any, void(0)] );
 
 
 const ContinuationMap = Map(ContentAddress, Task.Continuation);
@@ -132,10 +134,11 @@ Task.Instruction.deserialize = function (serialized, address)
     return Task.Instruction(fields);
 }
 
-Task.Continuation.start = function (isolate, { definition, scope })
+Task.Continuation.start = function (isolate, { definition, scope }, UUID)
 {
     const { entrypoints, instructions } = definition;
-    const continuation = Task.Continuation({ definition, instructions, scope });
+    const continuation =
+        Task.Continuation({ UUID, definition, instructions, scope });
 
     return Task.Continuation.update(isolate, continuation, entrypoints);
 }
@@ -148,10 +151,6 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
             DenseIntSet.isEmpty(unblocked),
         ([isolate, continuation, unblocked]) =>
         {
-            // We can get success with running stuff...
-            if (is (Task.Success, continuation))
-                return [isolate, continuation, DenseIntSet.Empty];
-
             const [address, restUnblocked] = DenseIntSet.first(unblocked);
             const instruction = continuation.instructions[address];
             const operation = [step, resolve, branch][instruction.opcode];
@@ -162,22 +161,20 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
             return [uIsolate, uContinuation, uUnblocked];
         }, [isolate, continuation, unblocked]);
 
-    const failed =
-        uContinuation.errors.size > 0 &&
-        !uContinuation.running;
+    const { definition, UUID } = uContinuation;
+    const result =
+        uContinuation.errors.size > 0 && !uContinuation.running ?
+            Task.Failure({ errors: uContinuation.errors }) :
+        DenseIntSet.equals(definition.complete, uContinuation.completed) ?
+            Task.Success({ value: uContinuation.result }) :
+        uContinuation;
 
-    if (failed)
-        return [uIsolate, Task.Failure({ errors: uContinuation.errors })];
+    if (result === uContinuation || UUID === false)
+        return [uIsolate, result];
 
-    const complete = continuation.definition.complete;
-    const succeeded = DenseIntSet.equals(complete, uContinuation.completed);
+    const uMemoizations = isolate.memoizations.set(UUID, result);
 
-    if (succeeded)
-        return [uIsolate, Task.Success({ value:
-                uContinuation.result === maybe(any).nothing ?
-                void(0) : uContinuation.result.value })];
-
-    return [uIsolate, uContinuation];
+    return [Δ(isolate, { memoizations: uMemoizations }), result];
 }
 
 function step(isolate, continuation, instruction)
@@ -189,8 +186,7 @@ function step(isolate, continuation, instruction)
 
 function resolve(isolate, continuation, instruction)
 {
-    const value = evaluate(continuation, instruction);
-    const result = maybe(any).just({ value });
+    const result = evaluate(continuation, instruction);
     const uCompleted =
         DenseIntSet.add(instruction.address, continuation.completed);
     const uContinuation =
@@ -211,12 +207,8 @@ function branch(isolate, continuation, instruction)
     // function identically as a synchronous instruction, and return the updated
     // continuation.
     if (isolate.memoizations.has(contentAddress))
-    {
-        const result = isolate.memoizations.get(contentAddress);
-        const Δbindings = { [name]: result.value };
-
-        return [isolate, ...updateScope(continuation, instruction, Δbindings)];
-    }
+        return completed(isolate, continuation, instruction, name,
+            isolate.memoizations.get(contentAddress));
 
     const addresses = instruction.dependents;
     const bindings = Set(string)([name]);
@@ -276,14 +268,15 @@ function branch(isolate, continuation, instruction)
         return completed(isolate, continuation, instruction, name, child);
 
     // MARK SELF AS RUNNING BEFORE-HAND!
-    const [uIsolate, child] = Task.Continuation.start(isolate, result);
+    const [uIsolate, child] =
+        Task.Continuation.start(isolate, result, contentAddress);
 
     if (is (Task.Continuation, child))
     {
         if (contentAddress === false)
         {
             const uUnmemoizedChildren =
-                continuation.unmemoizedChildren.push(started);
+                continuation.unmemoizedChildren.push(child);
             const uContinuation = Δ(continuation,
                 { unmemoizedChildren: uUnmemoizedChildren });
 
@@ -292,7 +285,7 @@ function branch(isolate, continuation, instruction)
 
         // Mark running in isolate!
         const uMemoizedChildren =
-            continuation.memoizedChildren.set(contentAddress, started);
+            continuation.memoizedChildren.set(contentAddress, child);
         const uContinuation =
             Δ(continuation, { memoizedChildren: uMemoizedChildren });
 
