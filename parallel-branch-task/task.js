@@ -201,7 +201,6 @@ function branch(isolate, continuation, instruction)
     const invocation = Invocation.deserialize(sInvocation);
     const contentAddress = getContentAddressOf(invocation);
 
-    // FIXME: HANDLE ERROR
     // The simplest case is that *someone else* has already encountered this
     // invocation, and it has been fully resolved. In this case, we essentially
     // function identically as a synchronous instruction, and return the updated
@@ -221,9 +220,10 @@ function branch(isolate, continuation, instruction)
     // The second simplest case is that we've already encountered this
     // invocation internally, so we only have to update the dependent
     // information.
-    if (continuation.queued.has(contentAddress) ||
+    if (contentAddress !== false &&
+        (continuation.queued.has(contentAddress) ||
         continuation.references.has(contentAddress) ||
-        continuation.memoizedChildren.has(contentAddress))
+        continuation.memoizedChildren.has(contentAddress)))
         return [isolate,
             Δ(continuation, { dependents:uDependents }),
             DenseIntSet.Empty];
@@ -271,28 +271,26 @@ function branch(isolate, continuation, instruction)
     const [uIsolate, child] =
         Task.Continuation.start(isolate, result, contentAddress);
 
-    if (is (Task.Continuation, child))
+    if (!is (Task.Continuation, child))
+        return completed(uIsolate, continuation, instruction, name, child);
+
+    if (contentAddress === false)
     {
-        if (contentAddress === false)
-        {
-            const uUnmemoizedChildren =
-                continuation.unmemoizedChildren.push(child);
-            const uContinuation = Δ(continuation,
-                { unmemoizedChildren: uUnmemoizedChildren });
-
-            return [uIsolate, uContinuation, DenseIntSet.Empty];
-        }
-
-        // Mark running in isolate!
-        const uMemoizedChildren =
-            continuation.memoizedChildren.set(contentAddress, child);
-        const uContinuation =
-            Δ(continuation, { memoizedChildren: uMemoizedChildren });
+        const uUnmemoizedChildren =
+            continuation.unmemoizedChildren.push(child);
+        const uContinuation = Δ(continuation,
+            { unmemoizedChildren: uUnmemoizedChildren });
 
         return [uIsolate, uContinuation, DenseIntSet.Empty];
     }
 
-    return completed(uIsolate, continuation, instruction, name, child);
+    // Mark running in isolate!
+    const uMemoizedChildren =
+        continuation.memoizedChildren.set(contentAddress, child);
+    const uContinuation =
+        Δ(continuation, { memoizedChildren: uMemoizedChildren });
+
+    return [uIsolate, uContinuation, DenseIntSet.Empty];
 }
 
 function completed(isolate, continuation, instruction, name, result)
