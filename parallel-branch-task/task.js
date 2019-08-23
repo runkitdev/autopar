@@ -28,15 +28,11 @@ const Invocation        =   data `Invocation` (
 Task.Invocation = Invocation;
 
 Task.Success            =   data `Task.Success` (
-    value               =>  any,
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+    value               =>  any );
 
 Task.Failure            =   data `Task.Failure` (
     name                =>  [Task.Identifier, "hi"],
-    errors              =>  List(any),
-    ([waitingLeaves])   =>  data.always (KeyPathsByName.None),
-    ([referenceLeaves]) =>  data.always (KeyPathsByName.None) );
+    errors              =>  List(any) );
 
 
 Task.Instruction            =   data `Task.Instruction` (
@@ -230,7 +226,7 @@ function branch(isolate, continuation, instruction)
 
     // Next we check if it's currently running, where we can't swap it in yet,
     // so we have to add it as a reference.
-    if (isolate.running.has(contentAddress))
+    if (isolate.occupied.has(contentAddress))
     {
         const uReferences = continuation.references.add(contentAddress);
         const uContinuation = Δ(continuation,
@@ -250,12 +246,14 @@ function branch(isolate, continuation, instruction)
     }
 
     // This means we can invoke.
-    const [isPromise, result] = invoke(invocation);
+    const [isThenable, result] = invoke(invocation);
 
-    if (isPromise)
+    if (isThenable)
     {
-        const uRunning = isolate.running.set(contentAddress, result);
-        const uIsolate = Δ(isolate, { running: uRunning });
+        const slot = uIsolate.free.first();
+        const uFree = uIsolate.free.remove(slot);
+        const uOccupied = uIsolate.occupied.set(slot, result);
+        const uIsolate = Δ(isolate, { free: uFree, occupied: uOccupied });
 
         const uReferences = continuation.references.add(contentAddress);
         const uContinuation = Δ(continuation,
@@ -308,34 +306,6 @@ function completed(isolate, continuation, instruction, name, result)
     return [isolate, ...updateScope(continuation, instruction, Δbindings)];
 }
 
-/*
-    if (is (Task.Failure, result))
-    {
-        const uMemoizations = isolate.memoizations.set(contentAddress, result);
-        const uIsolate = Δ(isolate, { memoizations: uMemoizations });
-
-        const uErrors = continuation.errors.concat(result.errors);
-        const uContinuation = Δ(continuation, { errors: uErrors });
-
-        return [isolate, uContinuation, DenseIntSet.Empty];
-    }
-
-    if (is (Task.Success, result))
-    {
-        const uMemoizations = isolate.memoizations.set(contentAddress, result);
-        const uIsolate = Δ(isolate, { memoizations: uMemoizations });
-        const Δbindings = { [name]: result.value };
-
-        return [uIsolate, ...updateScope(continuation, instruction, Δbindings)];
-    }
-
-*/
-
-/*
-function settle(continuation, succeeded, contentAddress)
-{
-}*/
-
 function Δ(original, changes)
 {
     return type.of(original)({ ...original, ...changes });
@@ -358,18 +328,6 @@ function updateScope(continuation, instruction, Δbindings)
         instruction.dependents);
 
     return [uContinuation, unblocked];
-}
-
-function settle(continuation, result)
-{
-    if (is (Task.Failure, result))
-    {
-        const uErrors = continuation.failures.push(value);
-        const uContinuation =
-            Task.Continuation({ ...continuation, errors: uErrors });
-
-        return [uIsolate, uContinuation, DenseIntSet.Empty];
-    }
 }
 
 Invocation.deserialize = function ([signature, args])
