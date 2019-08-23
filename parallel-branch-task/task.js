@@ -250,9 +250,9 @@ function branch(isolate, continuation, instruction)
 
     if (isThenable)
     {
-        const slot = uIsolate.free.first();
-        const uFree = uIsolate.free.remove(slot);
-        const uOccupied = uIsolate.occupied.set(slot, result);
+        const slot = isolate.free.first();
+        const uFree = isolate.free.remove(slot);
+        const uOccupied = isolate.occupied.set(slot, result);
         const uIsolate = Δ(isolate, { free: uFree, occupied: uOccupied });
 
         const uReferences = continuation.references.add(contentAddress);
