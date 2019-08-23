@@ -263,7 +263,7 @@ function branch(isolate, continuation, instruction)
     }
 
     if (!is (Task.Called, result))
-        return completed(isolate, continuation, instruction, name, child);
+        return completed(isolate, continuation, instruction, name, result);
 
     // MARK SELF AS RUNNING BEFORE-HAND!
     const [uIsolate, child] =
