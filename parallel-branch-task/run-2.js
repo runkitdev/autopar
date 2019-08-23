@@ -1,4 +1,4 @@
-const { is, data, any, number, string, union, boolean, object } = require("@algebraic/type");
+const { Δ,  is, data, any, number, string, union, boolean, object } = require("@algebraic/type");
 const { List, Map, OrderedSet, Set } = require("@algebraic/collections");
 const Task = require("./task");
 const Independent = require("./independent");
@@ -12,6 +12,8 @@ const Thenable = object;
 const Isolate = data `Isolate` (
     entrypoint      =>  any,
     memoizations    =>  [Map(string, any), Map(string, any)()],
+    succeeded       =>  Function,
+    failed          =>  Function,
 
     active          =>  [Set(string), Set(string)()],
 
@@ -32,23 +34,48 @@ module.exports = function run(entrypoint, concurrency = 1)
     {
         const range = Array.from({ length: concurrency }, (_, index) => index);
         const free = OrderedSet(number)(range);
-    
-        let isolate = Isolate({ entrypoint, free });
-        const continuation = Task.Continuation.start(isolate, entrypoint, "ROOT");
-        console.log(continuation);//Task.Continuation.update(entrypoint, isolate));
-/*        const finish = task =>
-            is(Task.Success, task) ?
-                resolve(task.value) : reject(task);
-        const settle = (succeeded, forContentAddress) => value =>
-            isolate = update(isolate,
-                PromiseSettled.from(succeeded, forContentAddress, value));
 
-        let isolate = Isolate({ concurrency: 1, task, settle, finish });
-console.log(isolate);
-        isolate = allot(isolate);
-console.log(isolate);*/
+        const settled = cast => UUID =>
+            value => console.log("AND NOW " +(isolate = Isolate.settle(isolate, cast(value), UUID)));
+        const succeeded = settled(value => Task.Success({ value }));
+        const failed = settled(error => Task.Failure.from(error));
+
+        let isolate = Isolate({ entrypoint, free, succeeded, failed });
+
+        const [uIsolate, uEntrypoint] =
+            Task.Continuation.start(isolate, entrypoint, "ROOT");
+
+        isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
+
+        console.log(isolate);
     });
 }
+
+Isolate.settle = function (isolate, result, forContentAddress)
+{
+    const uMemoizations = isolate.memoizations.set(forContentAddress, result);
+    const uIsolate = Δ(isolate, { memoizations: uMemoizations });
+
+    return uIsolate;
+}
+
+Isolate.allot = function (isolate, thenable, forUUID)
+{
+    const slot = isolate.free.first();
+    const uFree = isolate.free.remove(slot);
+    const uOccupied = isolate.occupied.set(slot, thenable);
+    const uIsolate = Δ(isolate, { free: uFree, occupied: uOccupied });
+
+    // We Promise wrap because we can't be sure that then() won't do something
+    // synchronously.
+    Promise
+        .resolve(thenable)
+        .then(isolate.succeeded(forUUID), isolate.failed(forUUID));
+
+    return uIsolate;
+}
+
+
 /*
     
     if (ready.length <= 0)

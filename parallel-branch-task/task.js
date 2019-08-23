@@ -1,5 +1,5 @@
 const until = require("@climb/until");
-const { data, any, string, or, boolean, object, is, number, array, type } = require("@algebraic/type");
+const { Δ, data, any, string, or, boolean, object, is, number, array, type } = require("@algebraic/type");
 const maybe = require("@algebraic/type/maybe");
 const Optional = require("@algebraic/type/optional");
 const { List, OrderedMap, Map, Set } = require("@algebraic/collections");
@@ -250,11 +250,7 @@ function branch(isolate, continuation, instruction)
 
     if (isThenable)
     {
-        const slot = isolate.free.first();
-        const uFree = isolate.free.remove(slot);
-        const uOccupied = isolate.occupied.set(slot, result);
-        const uIsolate = Δ(isolate, { free: uFree, occupied: uOccupied });
-
+        const uIsolate = type.of(isolate).allot(isolate, result, contentAddress);
         const uReferences = continuation.references.add(contentAddress);
         const uContinuation = Δ(continuation,
             { dependents: uDependents, references: uReferences });
@@ -304,11 +300,6 @@ function completed(isolate, continuation, instruction, name, result)
     const Δbindings = { [name]: result.value };
 
     return [isolate, ...updateScope(continuation, instruction, Δbindings)];
-}
-
-function Δ(original, changes)
-{
-    return type.of(original)({ ...original, ...changes });
 }
 
 function updateScope(continuation, instruction, Δbindings)
@@ -374,11 +365,6 @@ function invoke(invocation)
     {
         return [false, Task.Failure({ errors:List(any)([error]) })];
     }
-}
-
-async function ensureAsyncThen(thenable)
-{
-    return await thenable;
 }
 
 function isThenable(value)
