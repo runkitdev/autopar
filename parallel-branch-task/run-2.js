@@ -9,11 +9,18 @@ const update = require("@cause/cause/update");
 
 const Thenable = object;
 
+const ContentAddress    = string;
+const zeroed = T => [T, T()];
+
+
 const Isolate = data `Isolate` (
-    entrypoint      =>  any,
-    memoizations    =>  [Map(string, any), Map(string, any)()],
-    succeeded       =>  Function,
-    failed          =>  Function,
+    entrypoint          =>  any,
+
+    memoizations        =>  zeroed(Map(ContentAddress, any)),
+    running             =>  zeroed(Set(ContentAddress)),
+    
+    succeeded           =>  Function,
+    failed              =>  Function,
 
     RIDs            =>  [Map(string, number), Map(string, number)()],
     nextRID         =>  [number, 0],
@@ -59,7 +66,7 @@ module.exports = function run(entrypoint, concurrency = 1)
 // memoizable
 
 // Probably fail if already exists?
-Isolate.assignRID = function (isolate, invocation, memoizable)
+Isolate.assignExecutionID = function (isolate, invocation, memoizable)
 {
     const { nextRID } = isolate;
     const contentAddress = !!memoizable && getContentAddressOf(invocation);

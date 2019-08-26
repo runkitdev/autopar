@@ -189,54 +189,44 @@ function branch(isolate, continuation, statement)
     const name = statement.operation.binding;
     const sInvocation = evaluate(continuation, statement.block);
     const invocation = Invocation.deserialize(sInvocation);
+
     const contentAddress = getContentAddressOf(invocation);
+    const memoizable = !!contentAddress;
 
-    // The simplest case is that *someone else* has already encountered this
-    // invocation, and it has been fully resolved. In this case, we essentially
-    // function identically as a synchronous instruction, and return the updated
-    // continuation.
-    if (isolate.memoizations.has(contentAddress))
-        return completed(isolate, continuation, statement, name,
-            isolate.memoizations.get(contentAddress));
-
-    const addresses = statement.dependents;
-    const bindings = Set(string)([name]);
-    const dependents = Dependents({ addresses, bindings });
-
-    const uDependents = continuation.dependents
-        .update(contentAddress, false, existing =>
-            Dependents.union(existing, dependents));
-
-    // The second simplest case is that we've already encountered this
-    // invocation internally, so we only have to update the dependent
-    // information.
-/*    if (contentAddress !== false &&
-        (continuation.queued.has(contentAddress) ||
-        continuation.references.has(contentAddress) ||
-        continuation.memoizedChildren.has(contentAddress)))
-        return [isolate,
-            Δ(continuation, { dependents:uDependents }),
-            DenseIntSet.Empty];
-*/
-    // Next we check if it's currently running, where we can't swap it in yet,
-    // so we have to add it as a reference.
-    if (isolate.occupied.has(contentAddress))
+    if (memoizable)
     {
-        const uReferences = continuation.references.add(contentAddress);
-        const uContinuation = Δ(continuation,
-            { dependents:uDependents, references:uReferences });
+        // If this is a memoizable invocation, the simplest case is that it has
+        // already been fully resolved at some point in the past. In this case,
+        // we essentially function identically as a synchronous instruction, and
+        // return the updated continuation.
+        const memoizedResult = isolate.memoizations.get(contentAddress, false);
+    
+        if (memoizedResult)
+            return completed(
+                isolate, continuation, statement, name, memoizedResult);
 
-        return [isolate, uContinuation, DenseIntSet.Empty];
+        // The second simplest case is that it has already kicked off but is
+        // still running.
+        if (isolate.running.has(contentAddress))
+        {
+            const existingEID = isolate.EIDs.get(contentAddress);
+            const uReferences = continuation.references
+                .update(existingEID, List(Statement)(),
+                    statements => statements.push(statement));
+            const uContinuation = Δ(continuation, { references:uReferences });
+
+            return [isolate, uContinuation, DenseIntSet.Empty];
+        }
     }
 
     // Check if the isolate could support another task.
     if (!isolate.hasVacancy)
     {
-        const uQueued = continuation.queued.set(contentAddress, invocation);
+/*        const uQueued = continuation.queued.set(contentAddress, invocation);
         const uContinuation =
             Δ(continuation, { queued: uQueued, dependents: uDependents });
 
-        return [isolate, uContinuation, DenseIntSet.Empty];
+        return [isolate, uContinuation, DenseIntSet.Empty];*/
     }
 
     // This means we can invoke.
