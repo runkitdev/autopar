@@ -11,6 +11,9 @@ const DenseIntSet = require("@algebraic/dense-int-set");
 const BindingName       =   string;
 const ContentAddress    =   string;
 
+const Instruction = require("./instruction");
+const Statement = require("./statement");
+
 
 const Task              =   union `Task` (
     is                  =>  Task.Waiting,
@@ -34,18 +37,10 @@ Task.Failure            =   data `Task.Failure` (
     name                =>  [Task.Identifier, "hi"],
     errors              =>  List(any) );
 
-
-Task.Instruction            =   data `Task.Instruction` (
-    opcode                  =>  number,
-    address                 =>  number,
-    dependencies            =>  Array /*DenseIntSet*/,
-    dependents              =>  Array /*DenseIntSet*/,
-    execute                 =>  Function );
-
 Task.Definition             =   data `Task.Definition` (
-    instructions            =>  array(Task.Instruction),
-    ([complete])            =>  [Array, instructions =>
-                                    DenseIntSet.inclusive(instructions.length)],
+    statements              =>  array(Statement),
+    ([complete])            =>  [Array, statements =>
+                                    DenseIntSet.inclusive(statements.length)],
     entrypoints             =>  Array );
 
 Task.Scope                  =   data `Task.Scope` (
@@ -75,22 +70,32 @@ Dependents.union = function (lhs, rhs)
 }
 
 Task.Continuation           =   data `Task.Continuation` (
+
+    UUID                    =>  or (boolean, string), // EID?
     definition              =>  Task.Definition,
-    instructions            =>  array(Task.Instruction),
-    UUID                    =>  or (boolean, string),
+    memoized                =>  [boolean, true],
 
     scope                   =>  Task.Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
-
+/*
+    ([descendantReferences])    =>  [Set(any), (references, memoizedChildren) =>
+                                        unmemoizedChildren
+                                            .reduce((references, child) =>
+                                                references
+                                                    .union(child.descendentReferences),
+                                            references)],
+*/
+//    queued                  =>  [InvocationMap, InvocationMap()],
+//    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
+    
+    // Do we gain anything from this being a map?
     queued                  =>  [InvocationMap, InvocationMap()],
-    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
-    memoizedChildren        =>  [ContinuationMap, ContinuationMap()],
-    unmemoizedChildren      =>  [List(Task.Continuation), List(Task.Continuation)()],
+    children                =>  [List(Array), List(Array)()],
+    references              =>  [Map(number, Instruction), Map(number, Instruction)()],
+
     dependents              =>  [DependentMap, DependentMap()],
-    ([running])             =>  [boolean, (references, memoizedChildren, unmemoizedChildren) =>
-                                    references.size +
-                                    memoizedChildren.size +
-                                    unmemoizedChildren.size > 0],
+    ([running])             =>  [boolean, (children, references) =>
+                                    children.size + references.size > 0],
 
     errors                  =>  [List(any), List(any)()],
     result                  =>  [any, void(0)] );
@@ -100,12 +105,6 @@ const ContinuationMap = Map(ContentAddress, Task.Continuation);
 const DependentMap = Map(ContentAddress, Dependents);
 const InvocationMap = OrderedMap(ContentAddress, Task.Invocation);
 
-
-Task.Reference              =   data `Task.Reference` (
-    name                    =>  string,
-    invocation              =>  Invocation,
-    ([contentAddress])      =>  [string, invocation =>
-                                    getContentAddressOf(invocation)] );
 
 Scope = Task.Scope;
 
@@ -122,19 +121,11 @@ Task.Failure.from = function (error)
     return Task.Failure({ errors: List(any)([error]) });
 }
 
-Task.Instruction.deserialize = function (serialized, address)
-{
-    const [opcode, dependencies, dependents, execute] = serialized;
-    const fields = { opcode, dependencies, dependents, execute, address };
-
-    return Task.Instruction(fields);
-}
-
 Task.Continuation.start = function (isolate, { definition, scope }, UUID)
 {
-    const { entrypoints, instructions } = definition;
+    const { entrypoints } = definition;
     const continuation =
-        Task.Continuation({ UUID, definition, instructions, scope });
+        Task.Continuation({ UUID, definition, scope });
 
     return Task.Continuation.update(isolate, continuation, entrypoints);
 }
@@ -148,10 +139,10 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
         ([isolate, continuation, unblocked]) =>
         {
             const [address, restUnblocked] = DenseIntSet.first(unblocked);
-            const instruction = continuation.instructions[address];
-            const operation = [step, resolve, branch][instruction.opcode];
+            const { statements } = continuation.definition;
+            const statement = statements[address];
             const [uIsolate, uContinuation, dependents] =
-                operation(isolate, continuation, instruction);
+                perform(isolate, continuation, statement);
             const uUnblocked = DenseIntSet.union(restUnblocked, dependents);
 
             return [uIsolate, uContinuation, uUnblocked];
@@ -173,27 +164,30 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
     return [Δ(isolate, { memoizations: uMemoizations }), result];
 }
 
-function step(isolate, continuation, instruction)
+function perform(isolate, continuation, statement)
 {
-    const dScope = evaluate(continuation, instruction);
+    if (statement.operation === Statement.Operation.Step)
+        return [isolate, ...updateScope(continuation,
+            statement,
+            evaluate(continuation, statement.block))];
 
-    return [isolate, ...updateScope(continuation, instruction, dScope)];
+    if (statement.operation === Statement.Operation.Return)
+    {
+        const result = evaluate(continuation, statement.block);
+        const uCompleted =
+            DenseIntSet.add(statement.address, continuation.completed);
+        const uContinuation = Δ(continuation, { completed:uCompleted, result });
+
+        return [isolate, uContinuation, DenseIntSet.Empty];
+    }
+
+    return branch(isolate, continuation, statement);
 }
 
-function resolve(isolate, continuation, instruction)
+function branch(isolate, continuation, statement)
 {
-    const result = evaluate(continuation, instruction);
-    const uCompleted =
-        DenseIntSet.add(instruction.address, continuation.completed);
-    const uContinuation =
-        Task.Continuation({ ...continuation, completed:uCompleted, result });
-
-    return [isolate, uContinuation, DenseIntSet.Empty];
-}
-
-function branch(isolate, continuation, instruction)
-{
-    const [name, sInvocation] = evaluate(continuation, instruction);
+    const name = statement.operation.binding;
+    const sInvocation = evaluate(continuation, statement.block);
     const invocation = Invocation.deserialize(sInvocation);
     const contentAddress = getContentAddressOf(invocation);
 
@@ -202,10 +196,10 @@ function branch(isolate, continuation, instruction)
     // function identically as a synchronous instruction, and return the updated
     // continuation.
     if (isolate.memoizations.has(contentAddress))
-        return completed(isolate, continuation, instruction, name,
+        return completed(isolate, continuation, statement, name,
             isolate.memoizations.get(contentAddress));
 
-    const addresses = instruction.dependents;
+    const addresses = statement.dependents;
     const bindings = Set(string)([name]);
     const dependents = Dependents({ addresses, bindings });
 
@@ -216,14 +210,14 @@ function branch(isolate, continuation, instruction)
     // The second simplest case is that we've already encountered this
     // invocation internally, so we only have to update the dependent
     // information.
-    if (contentAddress !== false &&
+/*    if (contentAddress !== false &&
         (continuation.queued.has(contentAddress) ||
         continuation.references.has(contentAddress) ||
         continuation.memoizedChildren.has(contentAddress)))
         return [isolate,
             Δ(continuation, { dependents:uDependents }),
             DenseIntSet.Empty];
-
+*/
     // Next we check if it's currently running, where we can't swap it in yet,
     // so we have to add it as a reference.
     if (isolate.occupied.has(contentAddress))
@@ -259,14 +253,14 @@ function branch(isolate, continuation, instruction)
     }
 
     if (!is (Task.Called, result))
-        return completed(isolate, continuation, instruction, name, result);
+        return completed(isolate, continuation, statement, name, result);
 
     // MARK SELF AS RUNNING BEFORE-HAND!
     const [uIsolate, child] =
         Task.Continuation.start(isolate, result, contentAddress);
 
     if (!is (Task.Continuation, child))
-        return completed(uIsolate, continuation, instruction, name, child);
+        return completed(uIsolate, continuation, statement, name, child);
 
     if (contentAddress === false)
     {
@@ -287,7 +281,7 @@ function branch(isolate, continuation, instruction)
     return [uIsolate, uContinuation, DenseIntSet.Empty];
 }
 
-function completed(isolate, continuation, instruction, name, result)
+function completed(isolate, continuation, statement, name, result)
 {
     if (is (Task.Failure, result))
     {
@@ -299,24 +293,25 @@ function completed(isolate, continuation, instruction, name, result)
 
     const Δbindings = { [name]: result.value };
 
-    return [isolate, ...updateScope(continuation, instruction, Δbindings)];
+    return [isolate, ...updateScope(continuation, statement, Δbindings)];
 }
 
-function updateScope(continuation, instruction, Δbindings)
+function updateScope(continuation, statement, Δbindings)
 {
-    const { scope, completed, instructions } = continuation;
+    const { statements } = continuation.definition;
+    const { scope, completed } = continuation;
     const uScope = Scope.extend(scope, Δbindings);
-    const uCompleted = DenseIntSet.add(instruction.address, completed);
+    const uCompleted = DenseIntSet.add(statement.address, completed);
     const uContinuation = Task
         .Continuation({ ...continuation, scope:uScope, completed:uCompleted });
     const unblocked = DenseIntSet.reduce(
         (unblocked, address) =>
             DenseIntSet.isSubsetOf(uCompleted,
-                instructions[address].dependencies) ?
+                statements[address].dependencies) ?
             DenseIntSet.add(address, unblocked) :
             unblocked,
         DenseIntSet.Empty,
-        instruction.dependents);
+        statement.dependents);
 
     return [uContinuation, unblocked];
 }
@@ -330,11 +325,11 @@ Invocation.deserialize = function ([signature, args])
     return Invocation({ callee, thisArg, arguments: List(any)(args) });
 }
 
-function evaluate(continuation, instruction)
+function evaluate(continuation, block)
 {
     const { thisArg, bindings } = continuation.scope;
 
-    return instruction.execute.call(thisArg, bindings);
+    return block.call(thisArg, bindings);
 }
 
 // f() -> .Called() -> run
@@ -373,6 +368,48 @@ function isThenable(value)
 }
 
 module.exports = Task;
+
+
+
+Task.Continuation.settle = function (isolate, continuation, settled)
+{console.log("CHECKING " + settled);
+    //if (continuation.descendantReferences.intersect(settled).size <= 0)
+    //    return [isolate, continuation, settled];
+/*
+    until (
+        ([, continuation]) => continuation.descendantReferences.intersect(settled).size <= 0,
+        ([isolate, continuation, settled]) =>
+            continuation.memoizedChildren.mapAccum?(([isolate, settled], child) =>
+    
+        Task.Continuation.settle(isolate, child, settled),
+        [isolate, settled], child)
+
+    const intersection = references.intersect(settled);
+
+    if (intersection.size <= 0)
+        return [isolatee, continuation, settled];
+
+    // Need execution ID to retrieve instruction?
+    // Or do we just do Continuation -> Instruction
+    [isolate, continuation, unblocked] =
+    intersection.reduce((UUID) =>
+        references.remove(UUID),
+        completed(isolate,
+            continuation,
+            continuation.instruction,
+                // instructions for UUID 
+            continuation.dependentsFor(UUID) {name, result}
+            
+        ) )
+        
+    [] = update(unblocked);
+
+    // even if non-memoized?
+    iff(continuation === Task.Success or Task.Failure)
+        return [isolate, etc., settled.push(me)];
+
+    return [isolate, continuation, settled];*/
+}
 
 // update(root, [CA, value] )
 //    for_all_keys_matching(CA) -> fill out -> but on reeturn continue, etc.

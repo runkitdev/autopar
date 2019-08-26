@@ -3,6 +3,7 @@ const { isArray, from: ArrayFrom } = Array;
 const { any, number } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const Task = require("@parallel-branch/task");
+const Statement = require("@parallel-branch/task/statement");
 const Dependent = require("@parallel-branch/task/dependent");
 const { None } = require("@algebraic/type/optional");
 const DenseIntSet = require("@algebraic/dense-int-set");
@@ -20,9 +21,9 @@ module.exports.parallel = function parallel(f)
 
 module.exports.define = function (entrypoints, ...serialized)
 {
-	const instructions = serialized.map(Task.Instruction.deserialize);
+	const statements = serialized.map(Statement.deserialize);
 
-	return Task.Definition({ entrypoints, instructions });
+	return Task.Definition({ entrypoints, statements });
 }
 
 module.exports.call = function (definition, thisArg, initialBindings)

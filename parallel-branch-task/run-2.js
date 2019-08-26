@@ -15,6 +15,9 @@ const Isolate = data `Isolate` (
     succeeded       =>  Function,
     failed          =>  Function,
 
+    RIDs            =>  [Map(string, number), Map(string, number)()],
+    nextRID         =>  [number, 0],
+
     active          =>  [Set(string), Set(string)()],
 
     free            =>  [OrderedSet(number), OrderedSet(number)()],
@@ -51,12 +54,39 @@ module.exports = function run(entrypoint, concurrency = 1)
     });
 }
 
-Isolate.settle = function (isolate, result, forContentAddress)
-{
-    const uMemoizations = isolate.memoizations.set(forContentAddress, result);
-    const uIsolate = Δ(isolate, { memoizations: uMemoizations });
+// invocation *intrinsically* unmemoizable
+// requested umemoizable
+// memoizable
 
-    return uIsolate;
+// Probably fail if already exists?
+Isolate.assignRID = function (isolate, invocation, memoizable)
+{
+    const { nextRID } = isolate;
+    const contentAddress = !!memoizable && getContentAddressOf(invocation);
+
+    if (contentAddress === false)
+        return [Δ(isolate, { nextRID: nextRID + 1 }), nextRID];
+
+    if (isolate.RIDs.has(contentAddress))
+        return [isolate, isolate.RIDs.get(contentAddress)];
+
+    const uRIDs = Δ(RIDs, { RIDs: isolate.RIDs.set(contentAddress, nextRID) });
+    const uNextRID = nextRID + 1;
+    const uIsolate = Δ(isolate, { nextRID: uNextRID, RIDs: uRIDs });
+
+    return [uIsolate, nextRID];
+}
+
+
+Isolate.settle = function (isolate, result, forUUID)
+{console.log("here....");
+    const uMemoizations = isolate.memoizations.set(forUUID, result);
+    const [uIsolate, entrypoint] = Task.Continuation.settle(
+        Δ(isolate, { memoizations: uMemoizations }),
+        isolate.entrypoint,
+        Set(string)([forUUID]));
+
+    return Δ(uIsolate, { entrypoint });
 }
 
 Isolate.allot = function (isolate, thenable, forUUID)
