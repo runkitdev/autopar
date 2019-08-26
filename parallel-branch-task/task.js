@@ -11,8 +11,8 @@ const DenseIntSet = require("@algebraic/dense-int-set");
 const BindingName       =   string;
 const ContentAddress    =   string;
 
-const Instruction = require("./instruction");
 const Statement = require("./statement");
+const zeroed = T => [T, T()];
 
 
 const Task              =   union `Task` (
@@ -69,6 +69,15 @@ Dependents.union = function (lhs, rhs)
     return Dependents({ addresses, bindings });
 }
 
+/*const QueueKey              = or (ContentAddress, number);
+const QueueItem             = data `QueueItem` (
+    invoaction              =>  Invocation,
+    statements              =>  zeroed(List(Statement)) );
+
+const BranchQueue           =   data `BranchQueue` (
+    nextUnmemoizedID        =>  [number, 0],
+    queue                   =>  [OrderedMap(BranchQueue.Key, ) );*/
+
 Task.Continuation           =   data `Task.Continuation` (
 
     UUID                    =>  or (boolean, string), // EID?
@@ -77,6 +86,9 @@ Task.Continuation           =   data `Task.Continuation` (
 
     scope                   =>  Task.Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
+
+    children                =>  zeroed(List(Array)),
+    references              =>  zeroed(Map(number, List(Statement))),
 /*
     ([descendantReferences])    =>  [Set(any), (references, memoizedChildren) =>
                                         unmemoizedChildren
@@ -89,9 +101,11 @@ Task.Continuation           =   data `Task.Continuation` (
 //    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
     
     // Do we gain anything from this being a map?
-    queued                  =>  [InvocationMap, InvocationMap()],
-    children                =>  [List(Array), List(Array)()],
-    references              =>  [Map(number, Instruction), Map(number, Instruction)()],
+    
+//    nextQueueID             =>  [number, 0],
+//    queued                  =>  zeroed(OrderedMap(QueueKey, List(QueueItem))),
+
+
 
     dependents              =>  [DependentMap, DependentMap()],
     ([running])             =>  [boolean, (children, references) =>
@@ -222,11 +236,12 @@ function branch(isolate, continuation, statement)
     // Check if the isolate could support another task.
     if (!isolate.hasVacancy)
     {
-/*        const uQueued = continuation.queued.set(contentAddress, invocation);
-        const uContinuation =
-            Δ(continuation, { queued: uQueued, dependents: uDependents });
+        const key = memoizable && contentAddress;
+        const uQueued =
+            BranchQueue.push(continuation.queued, invocation, statement, key);
+        const uContinuation = Δ(continuation, { queued: uQueued });
 
-        return [isolate, uContinuation, DenseIntSet.Empty];*/
+        return [isolate, uContinuation, DenseIntSet.Empty];
     }
 
     // This means we can invoke.
