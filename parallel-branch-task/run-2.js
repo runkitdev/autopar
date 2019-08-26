@@ -17,24 +17,18 @@ const Isolate = data `Isolate` (
     entrypoint          =>  any,
 
     memoizations        =>  zeroed(Map(ContentAddress, any)),
-    active              =>  zeroed(Set(ContentAddress)),
 
     succeeded           =>  Function,
     failed              =>  Function,
 
     EIDs            =>  [Map(string, number), Map(string, number)()],
-    nextEID         =>  [number, 0],
+    nextEID         =>  [number, 1],
 
     free            =>  [OrderedSet(number), OrderedSet(number)()],
     occupied        =>  [Map(number, Thenable), Map(number, Thenable)()],
-    ([hasVacancy])  =>  [boolean, free => free.size > 0]
-    /*,
-    open        =>  List(Task),
-    running     =>  Map(string, Task),
-    memoized    =>  Map(string, Task),
-    finish      =>  Function,
-    settle      =>  Function*/ );
+    ([hasVacancy])  =>  [boolean, free => free.size > 0] );
 
+global.Isolate = Isolate;
 
 module.exports = function run(entrypoint, concurrency = 1)
 {
@@ -51,11 +45,12 @@ module.exports = function run(entrypoint, concurrency = 1)
         let isolate = Isolate({ entrypoint, free, succeeded, failed });
 
         const [uIsolate, uEntrypoint] =
-            Task.Continuation.start(isolate, entrypoint, "ROOT");
+            Task.Continuation.start(isolate, entrypoint, 0);
 
         isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
 
         console.log(isolate);
+        console.log(uEntrypoint);
     });
 }
 
@@ -94,21 +89,30 @@ Isolate.settle = function (isolate, result, forUUID)
     return Δ(uIsolate, { entrypoint });
 }
 
-Isolate.allot = function (isolate, thenable, forContentAddress)
+Isolate.activate = function (isolate, forContentAddress)
+{
+    const EID = isolate.nextEID;
+
+    const uNextEID = EID + 1;
+    const uEIDs = forContentAddress !== false ?
+        isolate.EIDs.set(EID, forContentAddress) :
+        isolate.EIDs;
+
+    const uMemoizations = forContentAddress !== false ?
+        isolate.memoizations.set(forContentAddress, Task.Running({ EID })) :
+        isolate.memoizations;
+
+    const uIsolate = Δ(isolate,
+        { EIDs: uEIDs, nextEID: uNextEID, memoizations: uMemoizations });
+
+    return [uIsolate, EID];
+}
+
+Isolate.allot = function (isolate, thenable, EID)
 {
     const slot = isolate.free.first();
     const uFree = isolate.free.remove(slot);
     const uOccupied = isolate.occupied.set(slot, thenable);
-
-    const EID = isolate.nextEID;
-    const uNextEID = EID + 1;
-
-    const uEIDs = forContentAddress !== false ?
-        isolate.EIDs.set(forContentAddress, EID) :
-        isolate.EIDs;
-    const uMemoizations = forContentAddress !== false ?
-        isolate.memoizations.set(forContentAddress, Task.Running({ EID })) :
-        isolate.memoizations;
 
     // We Promise wrap because we can't be sure that then() won't do something
     // synchronously.
@@ -116,14 +120,7 @@ Isolate.allot = function (isolate, thenable, forContentAddress)
         .resolve(thenable)
         .then(isolate.succeeded(EID), isolate.failed(EID));
 
-    return [EID, Δ(isolate,
-    {
-        EIDs: uEIDs,
-        nextEID: uNextEID,
-        memoizations: uMemoizations,
-        free: uFree,
-        occupied: uOccupied
-    })];
+    return Δ(isolate, { free: uFree, occupied: uOccupied });
 }
 
 
