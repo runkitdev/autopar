@@ -13,6 +13,7 @@ const ContentAddress    =   string;
 
 const Statement = require("./statement");
 const zeroed = T => [T, T()];
+const DIS = DenseIntSet;
 
 
 const Task              =   union `Task` (
@@ -36,6 +37,9 @@ Task.Success            =   data `Task.Success` (
 Task.Failure            =   data `Task.Failure` (
     name                =>  [Task.Identifier, "hi"],
     errors              =>  List(any) );
+    
+Task.Running            =   data `Task.Running` (
+    EID                 =>  number );
 
 Task.Definition             =   data `Task.Definition` (
     statements              =>  array(Statement),
@@ -207,30 +211,15 @@ function branch(isolate, continuation, statement)
     const contentAddress = getContentAddressOf(invocation);
     const memoizable = !!contentAddress;
 
-    if (memoizable)
+    // If there already exists a memoized instance of this, just return that.
+    if (memoizable && isolate.memoizations.has(contentAddress))
     {
-        // If this is a memoizable invocation, the simplest case is that it has
-        // already been fully resolved at some point in the past. In this case,
-        // we essentially function identically as a synchronous instruction, and
-        // return the updated continuation.
-        const memoizedResult = isolate.memoizations.get(contentAddress, false);
-    
-        if (memoizedResult)
-            return completed(
-                isolate, continuation, statement, name, memoizedResult);
+        const memoized = isolate.memoizations.get(contentAddress);
 
-        // The second simplest case is that it has already kicked off but is
-        // still running.
-        if (isolate.running.has(contentAddress))
-        {
-            const existingEID = isolate.EIDs.get(contentAddress);
-            const uReferences = continuation.references
-                .update(existingEID, List(Statement)(),
-                    statements => statements.push(statement));
-            const uContinuation = Δ(continuation, { references:uReferences });
-
-            return [isolate, uContinuation, DenseIntSet.Empty];
-        }
+        return is (Task.Running, memoized) ?
+            [isolate, reference(continuation, statement, memoized.EID),
+                DenseIntSet.Empty] :
+            completed(isolate, continuation, statement, memoized);
     }
 
     // Check if the isolate could support another task.
@@ -249,23 +238,22 @@ function branch(isolate, continuation, statement)
 
     if (isThenable)
     {
-        const uIsolate = type.of(isolate).allot(isolate, result, contentAddress);
-        const uReferences = continuation.references.add(contentAddress);
-        const uContinuation = Δ(continuation,
-            { dependents: uDependents, references: uReferences });
+        const [EID, uIsolate] =
+            type.of(isolate).allot(isolate, result, contentAddress);
+        const uContinuation = reference(continuation, statement, EID);
 
         return [uIsolate, uContinuation, DenseIntSet.Empty];
     }
 
     if (!is (Task.Called, result))
-        return completed(isolate, continuation, statement, name, result);
+        return completed(isolate, continuation, statement, result);
 
     // MARK SELF AS RUNNING BEFORE-HAND!
     const [uIsolate, child] =
         Task.Continuation.start(isolate, result, contentAddress);
 
     if (!is (Task.Continuation, child))
-        return completed(uIsolate, continuation, statement, name, child);
+        return completed(uIsolate, continuation, statement, child);
 
     if (contentAddress === false)
     {
@@ -286,7 +274,16 @@ function branch(isolate, continuation, statement)
     return [uIsolate, uContinuation, DenseIntSet.Empty];
 }
 
-function completed(isolate, continuation, statement, name, result)
+function reference(continuation, statement, EID)
+{
+    const uReferences = continuation.references
+        .update(EID, List(Statement)(),
+            statements => statements.push(statement));
+
+    return Δ(continuation, { references: uReferences });
+}
+
+function completed(isolate, continuation, statement, result)
 {
     if (is (Task.Failure, result))
     {
@@ -296,7 +293,7 @@ function completed(isolate, continuation, statement, name, result)
         return [isolate, uContinuation, DenseIntSet.Empty];
     }
 
-    const Δbindings = { [name]: result.value };
+    const Δbindings = { [statement.operation.binding]: result.value };
 
     return [isolate, ...updateScope(continuation, statement, Δbindings)];
 }

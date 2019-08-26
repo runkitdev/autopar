@@ -17,15 +17,13 @@ const Isolate = data `Isolate` (
     entrypoint          =>  any,
 
     memoizations        =>  zeroed(Map(ContentAddress, any)),
-    running             =>  zeroed(Set(ContentAddress)),
-    
+    active              =>  zeroed(Set(ContentAddress)),
+
     succeeded           =>  Function,
     failed              =>  Function,
 
-    RIDs            =>  [Map(string, number), Map(string, number)()],
-    nextRID         =>  [number, 0],
-
-    active          =>  [Set(string), Set(string)()],
+    EIDs            =>  [Map(string, number), Map(string, number)()],
+    nextEID         =>  [number, 0],
 
     free            =>  [OrderedSet(number), OrderedSet(number)()],
     occupied        =>  [Map(number, Thenable), Map(number, Thenable)()],
@@ -96,20 +94,36 @@ Isolate.settle = function (isolate, result, forUUID)
     return Δ(uIsolate, { entrypoint });
 }
 
-Isolate.allot = function (isolate, thenable, forUUID)
+Isolate.allot = function (isolate, thenable, forContentAddress)
 {
     const slot = isolate.free.first();
     const uFree = isolate.free.remove(slot);
     const uOccupied = isolate.occupied.set(slot, thenable);
-    const uIsolate = Δ(isolate, { free: uFree, occupied: uOccupied });
+
+    const EID = isolate.nextEID;
+    const uNextEID = EID + 1;
+
+    const uEIDs = forContentAddress !== false ?
+        isolate.EIDs.set(forContentAddress, EID) :
+        isolate.EIDs;
+    const uMemoizations = forContentAddress !== false ?
+        isolate.memoizations.set(forContentAddress, Task.Running({ EID })) :
+        isolate.memoizations;
 
     // We Promise wrap because we can't be sure that then() won't do something
     // synchronously.
     Promise
         .resolve(thenable)
-        .then(isolate.succeeded(forUUID), isolate.failed(forUUID));
+        .then(isolate.succeeded(EID), isolate.failed(EID));
 
-    return uIsolate;
+    return [EID, Δ(isolate,
+    {
+        EIDs: uEIDs,
+        nextEID: uNextEID,
+        memoizations: uMemoizations,
+        free: uFree,
+        occupied: uOccupied
+    })];
 }
 
 
