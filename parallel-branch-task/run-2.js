@@ -14,13 +14,15 @@ const ContentAddress    = string;
 const zeroed = T => [T, T()];
 
 
+const toSuccess = value => Task.Success({ value });
+const toFailure = error => Task.Failure({ errors: List(Any)([error]) });
+
 const Isolate = data `Isolate` (
     entrypoint          =>  any,
 
     memoizations        =>  zeroed(Map(ContentAddress, any)),
 
-    succeeded           =>  Function,
-    failed              =>  Function,
+    settled             =>  Function,
 
     EIDs            =>  [Map(string, number), Map(string, number)()],
     nextEID         =>  [number, 1],
@@ -37,13 +39,10 @@ module.exports = function run(entrypoint, concurrency = 1)
     {
         const range = Array.from({ length: concurrency }, (_, index) => index);
         const free = OrderedSet(number)(range);
+        const settled = (cast, slot, EID) => value =>
+            isolate = Isolate.settle(isolate, cast(value), slot, EID);
 
-        const settled = cast => UUID =>
-            value => console.log("AND NOW " +(isolate = Isolate.settle(isolate, cast(value), UUID)));
-        const succeeded = settled(value => Task.Success({ value }));
-        const failed = settled(error => Task.Failure.from(error));
-
-        let isolate = Isolate({ entrypoint, free, succeeded, failed });
+        let isolate = Isolate({ entrypoint, free, settled });
 
         const [uIsolate, uEntrypoint] =
             Task.Continuation.start(isolate, entrypoint, 0);
@@ -82,22 +81,29 @@ const Settled = data `Settled` (
     byEID   => zeroed(Map(number, Task.Completed)),
     EIDs    => Array );
 
-Isolate.settle = function (isolate, result, forEID)
-{console.log("here.... " + result);
+Isolate.settle = function (isolate, result, slot, forEID)
+{
+    // First off, make sure we free up this slot.
+    const uFree = isolate.free.add(slot);
+    const uOccupied = isolate.occupied.remove(slot);
+
+    // If this was a memoizable execution, update the memoized result.
     const contentAddress = isolate.EIDs.get(forEID, false);
     const uMemoizations = contentAddress ?
         isolate.memoizations.set(contentAddress, result) :
         isolate.memoizations;
-    const byEID = Map(number, Task.Completed)([[forEID, result]]);
-    const EIDs = DenseIntSet.just(forEID);console.log("one");
-    const settled = Settled({ byEID, EIDs });
-console.log("two");
-    const [uIsolate, entrypoint] = Task.Continuation.settle(
-        Δ(isolate, { memoizations: uMemoizations }),
-        isolate.entrypoint,
-        settled);
 
-    return Δ(uIsolate, { entrypoint });
+    const uIsolate = Δ(isolate,
+        { free:uFree, occupied: uOccupied, memoizations: uMemoizations });
+
+    const byEID = Map(number, Task.Completed)([[forEID, result]]);
+    const EIDs = DenseIntSet.just(forEID);
+    const settled = Settled({ byEID, EIDs });
+
+    const [uuIsolate, uEntrypoint] =
+        Task.Continuation.settle(uIsolate, isolate.entrypoint, settled);
+console.log("ALL DONE: " + Δ(uuIsolate, { entrypoint: uEntrypoint }));
+    return Δ(uuIsolate, { entrypoint: uEntrypoint });
 }
 
 Isolate.activate = function (isolate, forContentAddress)
@@ -127,9 +133,11 @@ Isolate.allot = function (isolate, thenable, EID)
 
     // We Promise wrap because we can't be sure that then() won't do something
     // synchronously.
-    Promise
-        .resolve(thenable)
-        .then(isolate.succeeded(EID), isolate.failed(EID));
+    const wrapped = Promise.resolve(thenable);
+    const succeeded = isolate.settled(toSuccess, slot, EID);
+    const failed = isolate.settled(toFailure, slot, EID);
+
+    wrapped.then(succeeded, failed);
 
     return Δ(isolate, { free: uFree, occupied: uOccupied });
 }
