@@ -3,7 +3,10 @@ const { isArray, from: ArrayFrom } = Array;
 const { any, number } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const Task = require("@parallel-branch/task");
+
+const Scope = require("@parallel-branch/task/scope");
 const Statement = require("@parallel-branch/task/statement");
+
 const Dependent = require("@parallel-branch/task/dependent");
 const { None } = require("@algebraic/type/optional");
 const DenseIntSet = require("@algebraic/dense-int-set");
@@ -28,13 +31,10 @@ module.exports.define = function (entrypoints, ...serialized)
 
 module.exports.call = function (definition, thisArg, initialBindings)
 {
-	const bindings = Object.assign(Object.create(null), initialBindings);
-	const scope = Task.Scope({ thisArg, bindings });
+	const scope = Scope.from(thisArg, initialBindings);
 
 	return Task.Called({ definition, scope });
 }
-
-
 
 const depend = (function ()
 {

@@ -12,6 +12,7 @@ const BindingName       =   string;
 const ContentAddress    =   string;
 
 const Invocation = require("./invocation");
+const Scope = require("./scope");
 const Statement = require("./statement");
 
 const zeroed = T => [T, T()];
@@ -44,13 +45,9 @@ Task.Definition             =   data `Task.Definition` (
                                     DenseIntSet.inclusive(statements.length)],
     entrypoints             =>  Array );
 
-Task.Scope                  =   data `Task.Scope` (
-    thisArg                 =>  any,
-    bindings                =>  object );
-
 Task.Called                 =   data `Task.Called` (
     definition              =>  Task.Definition,
-    scope                   =>  Task.Scope );
+    scope                   =>  Scope );
 
 // Queued -> CA -> List[References]
 // Running -> CA -> List[References]
@@ -72,7 +69,7 @@ Task.Continuation           =   data `Task.Continuation` (
     definition              =>  Task.Definition,
     memoized                =>  [boolean, true],
 
-    scope                   =>  Task.Scope,
+    scope                   =>  Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
 
     children                =>  zeroed(List(Task.Continuation)),
@@ -110,20 +107,6 @@ Task.Continuation           =   data `Task.Continuation` (
 
 
  );
-
-
-
-
-
-Scope = Task.Scope;
-
-Scope.extend = function (scope, newBindings)
-{
-    const bindings =
-        Object.assign(Object.create(scope.bindings), newBindings);
-
-    return Scope({ ...scope, bindings });
-}
 
 Task.Continuation.start = function (isolate, { definition, scope }, EID)
 {
@@ -307,15 +290,6 @@ function updateScope(continuation, statement, Δbindings)
         statement.dependents);
 
     return [uContinuation, unblocked];
-}
-
-Invocation.deserialize = function ([signature, args])
-{
-    const isMemberCall = Array.isArray(signature);
-    const thisArg = isMemberCall ? signature[0] : void(0);
-    const callee = isMemberCall ? thisArg[signature[1]] : signature;
-
-    return Invocation({ callee, thisArg, arguments: List(any)(args) });
 }
 
 function attempt(f)
