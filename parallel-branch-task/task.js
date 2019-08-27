@@ -142,11 +142,11 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
         DenseIntSet.equals(definition.complete, uContinuation.completed) ?
             Task.Success({ value: uContinuation.result }) :
         uContinuation;
-
+console.log(result === uContinuation, !isolate.EIDs.has(uContinuation.EID));
     // || !uContinuation.memoized?
     if (result === uContinuation || !isolate.EIDs.has(uContinuation.EID))
         return [uIsolate, result];
-
+//console.log("DONE...");
     const contentAddress = isolate.EIDs.get(uContinuation.EID);
     const uMemoizations = isolate.memoizations.set(contentAddress, result);
 
@@ -351,7 +351,12 @@ Task.Continuation.settle = function (isolate, continuation, settled)
         [continuation, DenseIntSet.Empty],
         DenseIntSet.intersection(settled.EIDs, continuation.directReferences));
 
-    if (!DenseIntSet.isEmpty(unblocked))
+// We have to consider the possibility of things that "get" the wrapped form
+// They can be unblocked of course.
+
+// Should we just check for done here instead of update?
+
+//    if (!DenseIntSet.isEmpty(unblocked))
         return Task.Continuation.update(isolate, uContinuation, unblocked);
 
     return [isolate, uContinuation];

@@ -15,7 +15,7 @@ const zeroed = T => [T, T()];
 
 
 const toSuccess = value => Task.Success({ value });
-const toFailure = error => Task.Failure({ errors: List(Any)([error]) });
+const toFailure = error => Task.Failure({ errors: List(any)([error]) });
 
 const Isolate = data `Isolate` (
     settle              =>  Function,
@@ -33,7 +33,7 @@ global.Isolate = Isolate;
 
 const Continuation = Task.Continuation;
 
-module.exports = function run(entrypoint, concurrency = 1)
+module.exports = function run(entrypoint, concurrency = 2)
 {
     return new Promise(function (resolve, reject)
     {
