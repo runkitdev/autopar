@@ -11,7 +11,9 @@ const DenseIntSet = require("@algebraic/dense-int-set");
 const BindingName       =   string;
 const ContentAddress    =   string;
 
+const Invocation = require("./invocation");
 const Statement = require("./statement");
+
 const zeroed = T => [T, T()];
 const DIS = DenseIntSet;
 
@@ -23,13 +25,6 @@ const Task              =   union `Task` (
 
 Task.Task               =   Task;
 Task.Identifier         =   Optional(string);
-
-const Invocation        =   data `Invocation` (
-    thisArg             =>  any,
-    callee              =>  Function,
-    arguments           =>  List(any)/*,
-    contentAddress      =>  [string, ""]*/ );
-Task.Invocation = Invocation;
 
 Task.Success            =   data `Task.Success` (
     value               =>  any );
@@ -73,7 +68,7 @@ const BranchQueue           =   data `BranchQueue` (
 
 Task.Continuation           =   data `Task.Continuation` (
 
-    EID                     =>  number, // EID?
+    EID                     =>  number,
     definition              =>  Task.Definition,
     memoized                =>  [boolean, true],
 
@@ -86,7 +81,7 @@ Task.Continuation           =   data `Task.Continuation` (
     ([running])             =>  [boolean, (children, references) =>
                                     children.size + references.size > 0],
 
-    errors                  =>  [List(any), List(any)()],
+    errors                  =>  zeroed(List(any)),
     result                  =>  [any, void(0)]
 /*
     ([descendantReferences])    =>  [Set(any), (references, memoizedChildren) =>
@@ -119,11 +114,6 @@ Scope.extend = function (scope, newBindings)
         Object.assign(Object.create(scope.bindings), newBindings);
 
     return Scope({ ...scope, bindings });
-}
-
-Task.Failure.from = function (error)
-{
-    return Task.Failure({ errors: List(any)([error]) });
 }
 
 Task.Continuation.start = function (isolate, { definition, scope }, EID)
