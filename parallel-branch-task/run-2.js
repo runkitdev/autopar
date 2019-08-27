@@ -5,6 +5,7 @@ const Independent = require("./independent");
 const KeyPath = require("@algebraic/ast/key-path");
 const until = require("@climb/until");
 const update = require("@cause/cause/update");
+const DenseIntSet = require("@algebraic/dense-int-set");
 
 
 const Thenable = object;
@@ -78,13 +79,17 @@ Isolate.assignExecutionID = function (isolate, invocation, memoizable)
 }
 
 
-Isolate.settle = function (isolate, result, forUUID)
+Isolate.settle = function (isolate, result, forEID)
 {console.log("here....");
-    const uMemoizations = isolate.memoizations.set(forUUID, result);
+    const contentAddress = isolate.memoizations.get(forEID, false);
+    const uMemoizations = contentAddress ?
+        isolate.memoizations :
+        isolate.memoizations.set(forEID, result);
+
     const [uIsolate, entrypoint] = Task.Continuation.settle(
         Δ(isolate, { memoizations: uMemoizations }),
         isolate.entrypoint,
-        Set(string)([forUUID]));
+        DenseIntSet.just(forEID));
 
     return Δ(uIsolate, { entrypoint });
 }

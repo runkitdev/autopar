@@ -32,9 +32,9 @@ Task.Success            =   data `Task.Success` (
 Task.Failure            =   data `Task.Failure` (
     name                =>  [Task.Identifier, "hi"],
     errors              =>  List(any) );
-    
+
 Task.Completed          =   or (Task.Success, Task.Failure);
-    
+
 Task.Running            =   data `Task.Running` (
     EID                 =>  number );
 
@@ -75,8 +75,17 @@ Task.Continuation           =   data `Task.Continuation` (
     scope                   =>  Task.Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
 
-    children                =>  zeroed(List(Array)),
+    children                =>  zeroed(List(Task.Continuation)),
     references              =>  zeroed(Map(number, List(Statement))),
+
+    ([directReferences])    =>  [Array, references =>
+                                    DenseIntSet.from([...references.keySeq()])],
+    ([indirectReferences])  =>  [Array, children =>
+                                    children.reduce((references, child) =>
+                                        DenseIntSet.union(
+                                            child.indirectReferences,
+                                            DenseIntSet.add(EID, references)),
+                                        DenseIntSet.Empty)],
 
     ([running])             =>  [boolean, (children, references) =>
                                     children.size + references.size > 0],
@@ -93,9 +102,9 @@ Task.Continuation           =   data `Task.Continuation` (
 */
 //    queued                  =>  [InvocationMap, InvocationMap()],
 //    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
-    
+
     // Do we gain anything from this being a map?
-    
+
 //    nextQueueID             =>  [number, 0],
 //    queued                  =>  zeroed(OrderedMap(QueueKey, List(QueueItem))),
 
@@ -256,12 +265,12 @@ function receive(continuation, result, EID)
     const references = continuation.references;
     const uReferences = references.remove(EID);
     const uContinuation = Δ(continuation, { references: uReferences });
-
+console.log("NOW REFEREENCES: " + uReferences + " " + EID);
     return references
-        .get(EID)
-        .reduce((continuation, statement) =>
+        .get(EID, List(Statement)())
+        .reduce(([continuation], statement) =>
             advance(continuation, statement, result),
-            uContinuation);
+            [uContinuation]);
 }
 
 function advance(continuation, statement, result)
@@ -321,7 +330,7 @@ function attempt(f)
 
 // finished -> (with error)
 // finished -> (with success)
-// finished -> 
+// finished ->
 
 function invoke(invocation)
 {
@@ -355,7 +364,38 @@ module.exports = Task;
 
 
 Task.Continuation.settle = function (isolate, continuation, settled)
-{console.log("CHECKING " + settled);
+{
+    console.log("CHECKING " + settled);
+    console.log(continuation.indirectReferences);
+    console.log(continuation.directReferences);
+    console.log(">" + DenseIntSet.from([...continuation.references.keySeq()]));
+    console.log(">" + continuation.references.keySeq());
+
+    const uContinuation = DenseIntSet.reduce(
+        (continuation, EID) =>
+            receive(continuation,
+                isolate.memoizations.get(isolate.EIDs.get(EID)),
+                EID)[0],
+        continuation,
+        DenseIntSet.intersection(settled, continuation.directReferences));
+    console.log("OH! " + uContinuation);
+    return [isolate, uContinuation];
+
+//                console.log(EID), 0);
+
+        /*
+                intersection.reduce((UUID) =>
+        references.remove(UUID),
+        completed(isolate,
+            continuation,
+            continuation.instruction,
+                // instructions for UUID
+            continuation.dependentsFor(UUID) {name, result}
+
+        ) )*/
+
+    console.log("INTERSECTION: ", intersection);
+
     //if (continuation.descendantReferences.intersect(settled).size <= 0)
     //    return [isolate, continuation, settled];
 /*
@@ -363,7 +403,7 @@ Task.Continuation.settle = function (isolate, continuation, settled)
         ([, continuation]) => continuation.descendantReferences.intersect(settled).size <= 0,
         ([isolate, continuation, settled]) =>
             continuation.memoizedChildren.mapAccum?(([isolate, settled], child) =>
-    
+
         Task.Continuation.settle(isolate, child, settled),
         [isolate, settled], child)
 
@@ -380,11 +420,11 @@ Task.Continuation.settle = function (isolate, continuation, settled)
         completed(isolate,
             continuation,
             continuation.instruction,
-                // instructions for UUID 
+                // instructions for UUID
             continuation.dependentsFor(UUID) {name, result}
-            
+
         ) )
-        
+
     [] = update(unblocked);
 
     // even if non-memoized?
@@ -408,7 +448,7 @@ Promise
 
 
 
-    const { opcode, execute } = 
+    const { opcode, execute } =
     const [type, value] = execute.call(thisArg, scope);
 
     return [step, complete, branch](continuation, instruction)
@@ -432,7 +472,7 @@ Promise
 
         return [uContinuation, isolate];
     }
-    
+
     return [Task.Continuation({
             ...continuation,
             unblocked }), isolate];
