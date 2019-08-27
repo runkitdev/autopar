@@ -265,12 +265,12 @@ function receive(continuation, result, EID)
     const references = continuation.references;
     const uReferences = references.remove(EID);
     const uContinuation = Δ(continuation, { references: uReferences });
-console.log("NOW REFEREENCES: " + uReferences + " " + EID);
+console.log("NOW REFEREENCES: " + uReferences + " " + EID + " " + result);
     return references
         .get(EID, List(Statement)())
-        .reduce(([continuation], statement) =>
-            advance(continuation, statement, result),
-            [uContinuation]);
+        .reduce(accumUnblocked((continuation, statement) =>
+            advance(continuation, statement, result)),
+            [uContinuation, DenseIntSet.Empty]);
 }
 
 function advance(continuation, statement, result)
@@ -371,12 +371,12 @@ Task.Continuation.settle = function (isolate, continuation, settled)
     console.log(">" + DenseIntSet.from([...continuation.references.keySeq()]));
     console.log(">" + continuation.references.keySeq());
 
-    const uContinuation = DenseIntSet.reduce(
-        (continuation, EID) =>
-            receive(continuation,
-                isolate.memoizations.get(isolate.EIDs.get(EID)),
-                EID)[0],
-        continuation,
+    const [uContinuation] = DenseIntSet.reduce(
+        accumUnblocked((continuation, EID) => receive(
+            continuation,
+            isolate.memoizations.get(isolate.EIDs.get(EID)),
+            EID)),
+        [continuation, DenseIntSet.Empty],
         DenseIntSet.intersection(settled, continuation.directReferences));
     console.log("OH! " + uContinuation);
     return [isolate, uContinuation];
@@ -432,6 +432,14 @@ Task.Continuation.settle = function (isolate, continuation, settled)
         return [isolate, etc., settled.push(me)];
 
     return [isolate, continuation, settled];*/
+}
+
+function accumUnblocked(f)
+{
+    return ([continuation, unblocked], item) =>
+        (([uContinuation, dependents]) =>
+            [uContinuation, DenseIntSet.union(unblocked, dependents)])
+        (f(continuation, item));
 }
 
 // update(root, [CA, value] )

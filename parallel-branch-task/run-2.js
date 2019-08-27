@@ -80,11 +80,11 @@ Isolate.assignExecutionID = function (isolate, invocation, memoizable)
 
 
 Isolate.settle = function (isolate, result, forEID)
-{console.log("here....");
-    const contentAddress = isolate.memoizations.get(forEID, false);
+{console.log("here.... " + result);
+    const contentAddress = isolate.EIDs.get(forEID, false);
     const uMemoizations = contentAddress ?
-        isolate.memoizations :
-        isolate.memoizations.set(forEID, result);
+        isolate.memoizations.set(contentAddress, result) :
+        isolate.memoizations;
 
     const [uIsolate, entrypoint] = Task.Continuation.settle(
         Δ(isolate, { memoizations: uMemoizations }),
