@@ -60,21 +60,6 @@ Task.Called                 =   data `Task.Called` (
 // Queued -> CA -> List[References]
 // Running -> CA -> List[References]
 
-const Dependents            =   data `Dependents` (
-    addresses               =>  Array /*DenseIntSet*/,
-    bindings                =>  Set(string) );
-
-Dependents.union = function (lhs, rhs)
-{
-    if (lhs === false)
-        return rhs;
-
-    const addresses = DenseIntSet.union(lhs.addresses, rhs.addresses);
-    const bindings = lhs.bindings.concat(rhs.bindings);
-
-    return Dependents({ addresses, bindings });
-}
-
 /*const QueueKey              = or (ContentAddress, number);
 const QueueItem             = data `QueueItem` (
     invoaction              =>  Invocation,
@@ -83,6 +68,8 @@ const QueueItem             = data `QueueItem` (
 const BranchQueue           =   data `BranchQueue` (
     nextUnmemoizedID        =>  [number, 0],
     queue                   =>  [OrderedMap(BranchQueue.Key, ) );*/
+// const ContinuationMap = Map(ContentAddress, Task.Continuation);
+// const InvocationMap = OrderedMap(ContentAddress, Task.Invocation);
 
 Task.Continuation           =   data `Task.Continuation` (
 
@@ -95,6 +82,12 @@ Task.Continuation           =   data `Task.Continuation` (
 
     children                =>  zeroed(List(Array)),
     references              =>  zeroed(Map(number, List(Statement))),
+
+    ([running])             =>  [boolean, (children, references) =>
+                                    children.size + references.size > 0],
+
+    errors                  =>  [List(any), List(any)()],
+    result                  =>  [any, void(0)]
 /*
     ([descendantReferences])    =>  [Set(any), (references, memoizedChildren) =>
                                         unmemoizedChildren
@@ -112,18 +105,10 @@ Task.Continuation           =   data `Task.Continuation` (
 //    queued                  =>  zeroed(OrderedMap(QueueKey, List(QueueItem))),
 
 
-
-    dependents              =>  [DependentMap, DependentMap()],
-    ([running])             =>  [boolean, (children, references) =>
-                                    children.size + references.size > 0],
-
-    errors                  =>  [List(any), List(any)()],
-    result                  =>  [any, void(0)] );
+ );
 
 
-const ContinuationMap = Map(ContentAddress, Task.Continuation);
-const DependentMap = Map(ContentAddress, Dependents);
-const InvocationMap = OrderedMap(ContentAddress, Task.Invocation);
+
 
 
 Scope = Task.Scope;
@@ -195,8 +180,7 @@ function perform(isolate, continuation, statement)
     // If just executing the block failed, then this might as well be a Step
     // operation.
     if (!succeeded)
-        return [isolate, ...advance(continuation, statement,
-            Task.Failure.from(result))];
+        return [isolate, ...fail(continuation, [result])];
 
     if (operation === Statement.Operation.Step)
         return [isolate, ...updateScope(continuation, statement, result)];
@@ -292,17 +276,18 @@ function receive(continuation, result, EID)
 
 function advance(continuation, statement, result)
 {
-    if (is (Task.Failure, result))
-    {
-        const uErrors = continuation.errors.concat(result.errors);
-        const uContinuation = Δ(continuation, { errors: uErrors });
+    return is (Task.Failure, result) ?
+        fail(continuation, result.errors) :
+        updateScope(continuation, statement,
+            { [statement.operation.binding]: result.value });
+}
 
-        return [uContinuation, DenseIntSet.Empty];
-    }
+function fail(continuation, errors)
+{
+    const uErrors = continuation.errors.concat(errors);
+    const uContinuation = Δ(continuation, { errors: uErrors });
 
-    const Δbindings = { [statement.operation.binding]: result.value };
-
-    return updateScope(continuation, statement, Δbindings);
+    return [uContinuation, DenseIntSet.Empty];
 }
 
 function updateScope(continuation, statement, Δbindings)
@@ -332,13 +317,6 @@ Invocation.deserialize = function ([signature, args])
     const callee = isMemberCall ? thisArg[signature[1]] : signature;
 
     return Invocation({ callee, thisArg, arguments: List(any)(args) });
-}
-
-function evaluate(continuation, block)
-{
-    const { thisArg, bindings } = continuation.scope;
-
-    return block.call(thisArg, bindings);
 }
 
 function attempt(f)
