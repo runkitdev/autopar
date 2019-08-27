@@ -47,7 +47,7 @@ module.exports = function run(entrypoint, concurrency = 2)
 
         const sIsolate = Isolate({ resolve, reject, entrypoint, free, settle });
         const [uIsolate, uEntrypoint] =
-            Continuation.start(sIsolate, entrypoint, 0);
+            Task.Continuation.start(sIsolate, entrypoint, 0);
 
         if (!bridge(resolve, reject, uEntrypoint))
             isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
@@ -69,9 +69,20 @@ function bridge(resolve, reject, entrypoint)
 // requested umemoizable
 // memoizable
 
-const Settled = data `Settled` (
+const Completed = data `Completed` (
     byEID   => zeroed(Map(number, Task.Completed)),
-    EIDs    => Array );
+    EIDs    => [Array, DenseIntSet.Empty] );
+
+global.Completed = Completed;
+
+Completed.Empty = Completed();
+Completed.add = function (result, EID, completed)
+{
+    const uByEID = completed.byEID.set(EID, result);
+    const uEIDs = DenseIntSet.add(EID, completed.EIDs);
+
+    return Completed({ byEID: uByEID, EIDs: uEIDs });
+}
 
 Isolate.settle = function (isolate, result, slot, forEID)
 {
@@ -90,11 +101,11 @@ Isolate.settle = function (isolate, result, slot, forEID)
 
     const byEID = Map(number, Task.Completed)([[forEID, result]]);
     const EIDs = DenseIntSet.just(forEID);
-    const settled = Settled({ byEID, EIDs });
-
-    const [uuIsolate, uEntrypoint] =
-        Task.Continuation.settle(uIsolate, isolate.entrypoint, settled);
-console.log("ALL DONE: " + Δ(uuIsolate, { entrypoint: uEntrypoint }));
+    const completed = Completed({ byEID, EIDs });
+console.log("BEFEORE: ", completed);
+    const [uuIsolate, uEntrypoint, uCompleted] =
+        Task.Continuation.settle(uIsolate, isolate.entrypoint, completed);
+console.log("ALL DONE: " + Δ(uuIsolate, { entrypoint: uEntrypoint }), uCompleted);
     return Δ(uuIsolate, { entrypoint: uEntrypoint });
 }
 

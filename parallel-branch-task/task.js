@@ -25,13 +25,11 @@ const Task              =   union `Task` (
     or                  =>  Task.Completed );
 
 Task.Task               =   Task;
-Task.Identifier         =   Optional(string);
 
 Task.Success            =   data `Task.Success` (
     value               =>  any );
 
 Task.Failure            =   data `Task.Failure` (
-    name                =>  [Task.Identifier, "hi"],
     errors              =>  List(any) );
 
 Task.Completed          =   or (Task.Success, Task.Failure);
@@ -89,23 +87,11 @@ Task.Continuation           =   data `Task.Continuation` (
 
     errors                  =>  zeroed(List(any)),
     result                  =>  [any, void(0)]
-/*
-    ([descendantReferences])    =>  [Set(any), (references, memoizedChildren) =>
-                                        unmemoizedChildren
-                                            .reduce((references, child) =>
-                                                references
-                                                    .union(child.descendentReferences),
-                                            references)],
-*/
-//    queued                  =>  [InvocationMap, InvocationMap()],
-//    references              =>  [Set(ContentAddress), Set(ContentAddress)()],
 
-    // Do we gain anything from this being a map?
+//    queued                  =>  [InvocationMap, InvocationMap()],
 
 //    nextQueueID             =>  [number, 0],
 //    queued                  =>  zeroed(OrderedMap(QueueKey, List(QueueItem))),
-
-
  );
 
 Task.Continuation.start = function (isolate, { definition, scope }, EID)
@@ -117,6 +103,7 @@ Task.Continuation.start = function (isolate, { definition, scope }, EID)
     return Task.Continuation.update(isolate, continuation, entrypoints);
 }
 
+// proceed
 Task.Continuation.update = function update(isolate, continuation, unblocked)
 {
     const [uIsolate, uContinuation] = until(
@@ -142,11 +129,10 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
         DenseIntSet.equals(definition.complete, uContinuation.completed) ?
             Task.Success({ value: uContinuation.result }) :
         uContinuation;
-console.log(result === uContinuation, !isolate.EIDs.has(uContinuation.EID));
-    // || !uContinuation.memoized?
+
     if (result === uContinuation || !isolate.EIDs.has(uContinuation.EID))
         return [uIsolate, result];
-//console.log("DONE...");
+
     const contentAddress = isolate.EIDs.get(uContinuation.EID);
     const uMemoizations = isolate.memoizations.set(contentAddress, result);
 
@@ -336,30 +322,41 @@ function isThenable(value)
 module.exports = Task;
 
 
-
-Task.Continuation.settle = function (isolate, continuation, settled)
-{
-    console.log("CHECKING " + settled);
-    console.log(continuation.indirectReferences);
-    console.log(continuation.directReferences);
-    console.log(">" + DenseIntSet.from([...continuation.references.keySeq()]));
-    console.log(">" + continuation.references.keySeq());
-
-    const [uContinuation, unblocked] = DenseIntSet.reduce(
-        accumUnblocked((continuation, EID) =>
-            receive(continuation, settled.byEID.get(EID), EID)),
-        [continuation, DenseIntSet.Empty],
-        DenseIntSet.intersection(settled.EIDs, continuation.directReferences));
-
+// Only I care about completed.
 // We have to consider the possibility of things that "get" the wrapped form
 // They can be unblocked of course.
-
 // Should we just check for done here instead of update?
+Task.Continuation.settle = function (isolate, continuation, completed)
+{
+    const referenced =
+        DenseIntSet.intersection(completed.EIDs, continuation.directReferences);
+    const [uContinuation, unblocked, nCompleted] = DenseIntSet.reduce(
+        accumUnblocked((continuation, EID) =>
+            receive(continuation, completed.byEID.get(EID), EID)),
+        [continuation, DenseIntSet.Empty, completed],
+        referenced);
 
-//    if (!DenseIntSet.isEmpty(unblocked))
-        return Task.Continuation.update(isolate, uContinuation, unblocked);
+    const [uIsolate, uuContinuation] =
+        Task.Continuation.update(isolate, uContinuation, unblocked);
+    
+    if (is (Task.Completed, uuContinuation))
+    {
+        const uCompleted =
+            Completed.add(uuContinuation, uContinuation.EID, completed);
+        
+        return [uIsolate, uuContinuation, uCompleted];
+    }
 
-    return [isolate, uContinuation];
+    return [uIsolate, uuContinuation, completed];
+}
+
+function accumUnblocked(f)
+{
+    return ([continuation, unblocked], item) =>
+        (([uContinuation, dependents]) =>
+            [uContinuation, DenseIntSet.union(unblocked, dependents)])
+        (f(continuation, item));
+}
 
 //                console.log(EID), 0);
 
@@ -374,7 +371,6 @@ Task.Continuation.settle = function (isolate, continuation, settled)
 
         ) )*/
 
-    console.log("INTERSECTION: ", intersection);
 
     //if (continuation.descendantReferences.intersect(settled).size <= 0)
     //    return [isolate, continuation, settled];
@@ -412,15 +408,6 @@ Task.Continuation.settle = function (isolate, continuation, settled)
         return [isolate, etc., settled.push(me)];
 
     return [isolate, continuation, settled];*/
-}
-
-function accumUnblocked(f)
-{
-    return ([continuation, unblocked], item) =>
-        (([uContinuation, dependents]) =>
-            [uContinuation, DenseIntSet.union(unblocked, dependents)])
-        (f(continuation, item));
-}
 
 // update(root, [CA, value] )
 //    for_all_keys_matching(CA) -> fill out -> but on reeturn continue, etc.
