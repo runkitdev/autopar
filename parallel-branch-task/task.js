@@ -188,30 +188,33 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
 
 function perform(isolate, continuation, statement)
 {
-    if (statement.operation === Statement.Operation.Step)
-        return [isolate, ...updateScope(continuation,
-            statement,
-            evaluate(continuation, statement.block))];
+    const { thisArg, bindings } = continuation.scope;
+    const { address, block, operation } = statement;
+    const [succeeded, result] = attempt(() => block.call(thisArg, bindings));
 
-    if (statement.operation === Statement.Operation.Return)
-    {
-        const result = evaluate(continuation, statement.block);
-        const uCompleted =
-            DenseIntSet.add(statement.address, continuation.completed);
-        const uContinuation = Δ(continuation, { completed:uCompleted, result });
+    // If just executing the block failed, then this might as well be a Step
+    // operation.
+    if (!succeeded)
+        return [isolate, ...advance(continuation, statement,
+            Task.Failure.from(result))];
 
-        return [isolate, uContinuation, DenseIntSet.Empty];
-    }
+    if (operation === Statement.Operation.Step)
+        return [isolate, ...updateScope(continuation, statement, result)];
 
-    return branch(isolate, continuation, statement);
+    if (operation === Statement.Operation.Return)
+        return [isolate, Δ(continuation,
+        {
+            completed: DenseIntSet.add(address, continuation.completed),
+            result
+        }), DenseIntSet.Empty];
+
+    const invocation = Invocation.deserialize(result);
+
+    return branch(isolate, continuation, statement, invocation);
 }
 
-function branch(isolate, continuation, statement)
+function branch(isolate, continuation, statement, invocation)
 {
-    const name = statement.operation.binding;
-    const sInvocation = evaluate(continuation, statement.block);
-    const invocation = Invocation.deserialize(sInvocation);
-
     const contentAddress = getContentAddressOf(invocation);
     const memoizable = !!contentAddress;
 
@@ -336,6 +339,12 @@ function evaluate(continuation, block)
     const { thisArg, bindings } = continuation.scope;
 
     return block.call(thisArg, bindings);
+}
+
+function attempt(f)
+{
+    try { return [true, f()] }
+    catch (error) { return [false, error] }
 }
 
 // f() -> .Called() -> run
