@@ -78,6 +78,9 @@ Isolate.assignExecutionID = function (isolate, invocation, memoizable)
     return [uIsolate, nextRID];
 }
 
+const Settled = data `Settled` (
+    byEID   => zeroed(Map(number, Task.Completed)),
+    EIDs    => Array );
 
 Isolate.settle = function (isolate, result, forEID)
 {console.log("here.... " + result);
@@ -85,11 +88,14 @@ Isolate.settle = function (isolate, result, forEID)
     const uMemoizations = contentAddress ?
         isolate.memoizations.set(contentAddress, result) :
         isolate.memoizations;
-
+    const byEID = Map(number, Task.Completed)([[forEID, result]]);
+    const EIDs = DenseIntSet.just(forEID);console.log("one");
+    const settled = Settled({ byEID, EIDs });
+console.log("two");
     const [uIsolate, entrypoint] = Task.Continuation.settle(
         Δ(isolate, { memoizations: uMemoizations }),
         isolate.entrypoint,
-        DenseIntSet.just(forEID));
+        settled);
 
     return Δ(uIsolate, { entrypoint });
 }

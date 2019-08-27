@@ -372,12 +372,10 @@ Task.Continuation.settle = function (isolate, continuation, settled)
     console.log(">" + continuation.references.keySeq());
 
     const [uContinuation, unblocked] = DenseIntSet.reduce(
-        accumUnblocked((continuation, EID) => receive(
-            continuation,
-            isolate.memoizations.get(isolate.EIDs.get(EID)),
-            EID)),
+        accumUnblocked((continuation, EID) =>
+            receive(continuation, settled.byEID.get(EID), EID)),
         [continuation, DenseIntSet.Empty],
-        DenseIntSet.intersection(settled, continuation.directReferences));
+        DenseIntSet.intersection(settled.EIDs, continuation.directReferences));
 
     if (!DenseIntSet.isEmpty(unblocked))
         return Task.Continuation.update(isolate, uContinuation, unblocked);
