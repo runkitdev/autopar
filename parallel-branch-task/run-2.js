@@ -18,11 +18,9 @@ const toSuccess = value => Task.Success({ value });
 const toFailure = error => Task.Failure({ errors: List(Any)([error]) });
 
 const Isolate = data `Isolate` (
+    settle              =>  Function,
     entrypoint          =>  any,
-
     memoizations        =>  zeroed(Map(ContentAddress, any)),
-
-    settled             =>  Function,
 
     EIDs            =>  [Map(string, number), Map(string, number)()],
     nextEID         =>  [number, 1],
@@ -33,49 +31,43 @@ const Isolate = data `Isolate` (
 
 global.Isolate = Isolate;
 
+const Continuation = Task.Continuation;
+
 module.exports = function run(entrypoint, concurrency = 1)
 {
     return new Promise(function (resolve, reject)
     {
         const range = Array.from({ length: concurrency }, (_, index) => index);
         const free = OrderedSet(number)(range);
-        const settled = (cast, slot, EID) => value =>
+        const settle = (cast, slot, EID) => function (value)
+        {
             isolate = Isolate.settle(isolate, cast(value), slot, EID);
+            bridge(resolve, reject, isolate.entrypoint);
+        }
 
-        let isolate = Isolate({ entrypoint, free, settled });
-
+        const sIsolate = Isolate({ resolve, reject, entrypoint, free, settle });
         const [uIsolate, uEntrypoint] =
-            Task.Continuation.start(isolate, entrypoint, 0);
+            Continuation.start(sIsolate, entrypoint, 0);
 
-        isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
-
-        console.log(isolate);
-        console.log(uEntrypoint);
+        if (!bridge(resolve, reject, uEntrypoint))
+            isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
     });
+}
+
+function bridge(resolve, reject, entrypoint)
+{
+    if (is (Task.Success, entrypoint))
+        return (resolve(entrypoint.value), true);
+
+    if (is (Task.Failure, entrypoint))
+        return (reject(entrypoint.errors.toArray()), true);
+
+    return false;
 }
 
 // invocation *intrinsically* unmemoizable
 // requested umemoizable
 // memoizable
-
-// Probably fail if already exists?
-Isolate.assignExecutionID = function (isolate, invocation, memoizable)
-{
-    const { nextRID } = isolate;
-    const contentAddress = !!memoizable && getContentAddressOf(invocation);
-
-    if (contentAddress === false)
-        return [Δ(isolate, { nextRID: nextRID + 1 }), nextRID];
-
-    if (isolate.RIDs.has(contentAddress))
-        return [isolate, isolate.RIDs.get(contentAddress)];
-
-    const uRIDs = Δ(RIDs, { RIDs: isolate.RIDs.set(contentAddress, nextRID) });
-    const uNextRID = nextRID + 1;
-    const uIsolate = Δ(isolate, { nextRID: uNextRID, RIDs: uRIDs });
-
-    return [uIsolate, nextRID];
-}
 
 const Settled = data `Settled` (
     byEID   => zeroed(Map(number, Task.Completed)),
@@ -134,8 +126,8 @@ Isolate.allot = function (isolate, thenable, EID)
     // We Promise wrap because we can't be sure that then() won't do something
     // synchronously.
     const wrapped = Promise.resolve(thenable);
-    const succeeded = isolate.settled(toSuccess, slot, EID);
-    const failed = isolate.settled(toFailure, slot, EID);
+    const succeeded = isolate.settle(toSuccess, slot, EID);
+    const failed = isolate.settle(toFailure, slot, EID);
 
     wrapped.then(succeeded, failed);
 
