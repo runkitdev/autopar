@@ -6,6 +6,7 @@ const KeyPath = require("@algebraic/ast/key-path");
 const until = require("@climb/until");
 const update = require("@cause/cause/update");
 const DenseIntSet = require("@algebraic/dense-int-set");
+const EIDMap = require("./eid-map");
 
 
 const Thenable = object;
@@ -99,13 +100,10 @@ Isolate.settle = function (isolate, result, slot, forEID)
     const uIsolate = Δ(isolate,
         { free:uFree, occupied: uOccupied, memoizations: uMemoizations });
 
-    const byEID = Map(number, Task.Completed)([[forEID, result]]);
-    const EIDs = DenseIntSet.just(forEID);
-    const completed = Completed({ byEID, EIDs });
-console.log("BEFEORE: ", completed);
+    const completed = EIDMap.of(forEID, result);
     const [uuIsolate, uEntrypoint, uCompleted] =
         Task.Continuation.settle(uIsolate, isolate.entrypoint, completed);
-console.log("ALL DONE: " + Δ(uuIsolate, { entrypoint: uEntrypoint }), uCompleted);
+
     return Δ(uuIsolate, { entrypoint: uEntrypoint });
 }
 

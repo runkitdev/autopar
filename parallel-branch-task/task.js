@@ -321,13 +321,26 @@ function isThenable(value)
 
 module.exports = Task;
 
-
 // Only I care about completed.
 // We have to consider the possibility of things that "get" the wrapped form
 // They can be unblocked of course.
 // Should we just check for done here instead of update?
-Task.Continuation.settle = function (isolate, continuation, completed)
+Task.Continuation.settle = function settle(isolate, continuation, completed)
 {
+/*
+    if (!DenseIntSet.intersects(DenseIntSet.references, completed.EIDs))
+        return;
+
+    const [, [[uCompleted, uIsolate], uChildren]] = until(
+        ([handled, [[completed]]]) => handled !== completed,
+        ([_, [[completed, isolate], children]]) =>
+            [completed, mapAccum(settle, [completed, isolate], children)],
+        [Completed.Empty, [[completed, isolate], continuation.children]]);
+*/
+    const uIsolate = isolate;
+//    const uContinuation = continuation;
+    const uCompleted = completed;
+
     const referenced =
         DenseIntSet.intersection(completed.EIDs, continuation.directReferences);
     const [uContinuation, unblocked, nCompleted] = DenseIntSet.reduce(
@@ -336,19 +349,31 @@ Task.Continuation.settle = function (isolate, continuation, completed)
         [continuation, DenseIntSet.Empty, completed],
         referenced);
 
-    const [uIsolate, uuContinuation] =
+    const [uuIsolate, uuContinuation] =
         Task.Continuation.update(isolate, uContinuation, unblocked);
-    
-    if (is (Task.Completed, uuContinuation))
-    {
-        const uCompleted =
-            Completed.add(uuContinuation, uContinuation.EID, completed);
-        
-        return [uIsolate, uuContinuation, uCompleted];
-    }
 
-    return [uIsolate, uuContinuation, completed];
+    if (is (Task.Completed, uuContinuation))
+        return [uuIsolate, uuContinuation,
+            uCompleted.set(uContinuation.EID, uuContinuation)];
+
+    return [uuIsolate, uuContinuation, completed];
 }
+
+/*EIDCollection()
+
+active = { referencedEIDs, direct { referencedEIDs }, references { EIDs, byEIDs } }
+children = { referencedEIDs, direct { referencedEIDs }, references { EIDs, byEIDs } }
+
+references (dependents?) => EIDMap(T)
+{
+    byEID
+    EIDs
+}
+
+Children = List { } / EIDs
+
+EIDs total { Children EIDMap }*/
+
 
 function accumUnblocked(f)
 {
