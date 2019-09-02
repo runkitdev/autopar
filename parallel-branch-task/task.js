@@ -344,6 +344,8 @@ module.exports = Task;
 // Should we just check for done here instead of update?
 Task.Continuation.settle = function settle([completed, isolate], continuation)
 {
+    if (!DenseIntSet.intersects(continuation.references, completed.EIDs))
+        return;
 /*
     if (!DenseIntSet.intersects(DenseIntSet.references, completed.EIDs))
         return;
