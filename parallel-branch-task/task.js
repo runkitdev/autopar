@@ -4,6 +4,7 @@ const { List, OrderedMap, Map, Set } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const getContentAddressOf = require("@algebraic/type/content-address-of");
 const DenseIntSet = require("@algebraic/dense-int-set");
+const mapAccum = require("@climb/map-accum");
 
 const BindingName       =   string;
 const ContentAddress    =   string;
@@ -231,10 +232,10 @@ function branch(isolate, continuation, statement, invocation)
     if (is (Task.Completed, child))
         return [uuIsolate, ...receive(uContinuation, child, EID)];
 
-    const children = continuation.push(child);
+    const uChildren = continuation.children.push(child);
     const uuContinuation = Δ(uContinuation, { children: uChildren });
 
-    return [uuIsolate, uuContinuation, DenseInSet.Empty];
+    return [uuIsolate, uuContinuation, DenseIntSet.Empty];
 }
 
 function reference(continuation, statement, EID)
@@ -260,7 +261,7 @@ console.log("NOW REFEREENCES: " + uCallsites + " " + EID + " " + result);
 }
 
 function advance(continuation, statement, result)
-{
+{console.log(continuation, statement, result);
     return is (Task.Failure, result) ?
         fail(continuation, result.errors) :
         updateScope(continuation, statement,
@@ -338,47 +339,53 @@ function isThenable(value)
 
 module.exports = Task;
 
+function fMapAccum(...args)
+{
+    const [accum, array] = mapAccum(...args);
+    
+    return [accum, array.filter(child => !is (Task.Completed, child))];
+}
+
 // Only I care about completed.
 // We have to consider the possibility of things that "get" the wrapped form
 // They can be unblocked of course.
 // Should we just check for done here instead of update?
 Task.Continuation.settle = function settle([completed, isolate], continuation)
-{
+{console.log("WELL TRYING " + continuation); 
     if (!DenseIntSet.intersects(continuation.references, completed.EIDs))
-        return;
-/*
-    if (!DenseIntSet.intersects(DenseIntSet.references, completed.EIDs))
-        return;
+        return [[completed, isolate], continuation];
 
+console.log("I AM " + continuation.EID);
+
+    const { EID, callsites, children } = continuation;console.log(children);
     const [, [[uCompleted, uIsolate], uChildren]] = until(
-        ([handled, [[completed]]]) => handled !== completed,
+        ([handled, [[completed]]]) => handled.size === completed.size,
         ([_, [[completed, isolate], children]]) =>
-            [completed, mapAccum(settle, [completed, isolate], children)],
-        [Completed.Empty, [[completed, isolate], continuation.children]]);
-*/
-    const uIsolate = isolate;
-//    const uContinuation = continuation;
-    const uCompleted = completed;
+            [completed, fMapAccum(settle, [completed, isolate], children)],
+        [Completed.Empty, [[completed, isolate], children]]);
+
+    // Should we just EID Map children? That way receive could just get rid of it.
+    const uContinuation = Δ(continuation, { children: List(Task.Continuation)(uChildren) });
 
     const referenced =
-        DenseIntSet.intersection(completed.EIDs, continuation.callsites.EIDs);
-    const [uContinuation, unblocked, nCompleted] = DenseIntSet.reduce(
+        DenseIntSet.intersection(uCompleted.EIDs, callsites.EIDs);
+    const [uuContinuation, unblocked] = DenseIntSet.reduce(
         accumUnblocked((continuation, EID) =>
-            receive(continuation, completed.byEID.get(EID), EID)),
-        [continuation, DenseIntSet.Empty, completed],
+            receive(continuation, uCompleted.byEID.get(EID), EID)),
+        [uContinuation, DenseIntSet.Empty],
         referenced);
-
-    const [uuIsolate, uuContinuation] =
-        Task.Continuation.update(isolate, uContinuation, unblocked);
-
-    if (is (Task.Completed, uuContinuation))
+console.log("UNBLOCKED: [" + unblocked + "]" + " [" + referenced + "]" + uuContinuation);
+    const [uuIsolate, uuuContinuation] =
+        Task.Continuation.update(isolate, uuContinuation, unblocked);
+console.log("BUT NOW: " + uuuContinuation);
+    if (is (Task.Completed, uuuContinuation))
     {
-        const uuCompleted = uCompleted.set(uContinuation.EID, uuContinuation);
-
-        return [[uuCompleted, uuIsolate], uuContinuation];
+        const uuCompleted = uCompleted.set(EID, uuuContinuation);
+console.log(uuCompleted);
+        return [[uuCompleted, uuIsolate], uuuContinuation];
     }
 
-    return [[uCompleted, uuIsolate], uuContinuation];
+    return [[uCompleted, uuIsolate], uuuContinuation];
 }
 
 // branches { EID -> Statement.Branch }

@@ -43,6 +43,8 @@ module.exports = function run(entrypoint, concurrency = 2)
         const settle = (cast, slot, EID) => function (value)
         {
             isolate = Isolate.settle(isolate, cast(value), slot, EID);
+            
+            console.log("SO I GUSS WE FINISH WITH ", isolate.entrypoint);
             bridge(resolve, reject, isolate.entrypoint);
         }
 
@@ -50,8 +52,8 @@ module.exports = function run(entrypoint, concurrency = 2)
         const [uIsolate, uEntrypoint] =
             Task.Continuation.start(sIsolate, entrypoint, 0);
 
-        if (!bridge(resolve, reject, uEntrypoint))
-            isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
+        let isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
+        bridge(resolve, reject, uEntrypoint);
     });
 }
 
@@ -86,7 +88,7 @@ Completed.add = function (result, EID, completed)
 }
 
 Isolate.settle = function (isolate, result, slot, forEID)
-{
+{console.log("SETTLING " + result);
     // First off, make sure we free up this slot.
     const uFree = isolate.free.add(slot);
     const uOccupied = isolate.occupied.remove(slot);
