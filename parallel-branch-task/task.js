@@ -1,10 +1,7 @@
 const until = require("@climb/until");
 const { Δ, data, any, string, or, boolean, object, is, number, array, type } = require("@algebraic/type");
-const maybe = require("@algebraic/type/maybe");
-const Optional = require("@algebraic/type/optional");
 const { List, OrderedMap, Map, Set } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
-const { KeyPathsByName } = require("@algebraic/ast/key-path");
 const getContentAddressOf = require("@algebraic/type/content-address-of");
 const DenseIntSet = require("@algebraic/dense-int-set");
 
@@ -325,7 +322,7 @@ module.exports = Task;
 // We have to consider the possibility of things that "get" the wrapped form
 // They can be unblocked of course.
 // Should we just check for done here instead of update?
-Task.Continuation.settle = function settle(isolate, continuation, completed)
+Task.Continuation.settle = function settle([completed, isolate], continuation)
 {
 /*
     if (!DenseIntSet.intersects(DenseIntSet.references, completed.EIDs))
@@ -353,11 +350,31 @@ Task.Continuation.settle = function settle(isolate, continuation, completed)
         Task.Continuation.update(isolate, uContinuation, unblocked);
 
     if (is (Task.Completed, uuContinuation))
-        return [uuIsolate, uuContinuation,
-            uCompleted.set(uContinuation.EID, uuContinuation)];
+    {
+        const uuCompleted = uCompleted.set(uContinuation.EID, uuContinuation);
 
-    return [uuIsolate, uuContinuation, completed];
+        return [[uuCompleted, uuIsolate], uuContinuation];
+    }
+
+    return [[uCompleted, uuIsolate], uuContinuation];
 }
+
+// branches { EID -> Statement.Branch }
+// references { EID }
+// children { Continuation }
+
+// The reason to group them in "Children" is to avoid recalculating a bunch of stuff.
+// 1. actual owned children (Continuations)
+// 2. statements tthat rely on EIDs
+// 3. All EIDs myself and my children care about.
+
+// Branches
+//    - dependents [EID -> Index] { EIDMap }
+//    - references [EIDSet] 
+//    - attached [List?]
+
+// initiators (dependents) -> { EID -> Statement }
+// 
 
 /*EIDCollection()
 

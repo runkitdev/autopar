@@ -101,8 +101,8 @@ Isolate.settle = function (isolate, result, slot, forEID)
         { free:uFree, occupied: uOccupied, memoizations: uMemoizations });
 
     const completed = EIDMap.of(forEID, result);
-    const [uuIsolate, uEntrypoint, uCompleted] =
-        Task.Continuation.settle(uIsolate, isolate.entrypoint, completed);
+    const [[uCompleted, uuIsolate], uEntrypoint] =
+        Task.Continuation.settle([completed, uIsolate], isolate.entrypoint);
 
     return Δ(uuIsolate, { entrypoint: uEntrypoint });
 }
