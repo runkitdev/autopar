@@ -8,6 +8,7 @@ const DenseIntSet = require("@algebraic/dense-int-set");
 const BindingName       =   string;
 const ContentAddress    =   string;
 
+const EIDMap = require("./eid-map");
 const Invocation = require("./invocation");
 const Scope = require("./scope");
 const Statement = require("./statement");
@@ -67,6 +68,25 @@ Task.Continuation           =   data `Task.Continuation` (
     scope                   =>  Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
 
+// originating, creaetor? initiating, genesis
+// "callsite of origin"
+
+    callsites               =>  zeroed(EIDMap),
+    children                =>  zeroed(List(Task.Continuation)),
+    ([references])          =>  [Array /*DenseIntSet*/,
+                                    (callsites, children) => children
+                                        .map(child => child.references)
+                                        .reduce(DenseIntSet.union,
+                                            callsites.EIDs)],
+    
+    ([running])             =>  [boolean, callsites => callsites.size > 0],
+
+/*
+    branchDependents        =>  [EIDMap, EIDMap()],
+    referencedBranches      =>  [Array /*DenseIntSet*, DenseIntSet.Empty],
+    concreteBranches        =>  zeroed(List(Task.Continuation)),
+*/
+/*
     children                =>  zeroed(List(Task.Continuation)),
     references              =>  zeroed(Map(number, List(Statement))),
 
@@ -81,7 +101,7 @@ Task.Continuation           =   data `Task.Continuation` (
 
     ([running])             =>  [boolean, (children, references) =>
                                     children.size + references.size > 0],
-
+*/
     errors                  =>  zeroed(List(any)),
     result                  =>  [any, void(0)]
 
@@ -219,20 +239,20 @@ function branch(isolate, continuation, statement, invocation)
 
 function reference(continuation, statement, EID)
 {
-    const uReferences = continuation.references
+    const uCallsites = continuation.callsites
         .update(EID, List(Statement)(),
             statements => statements.push(statement));
 
-    return Δ(continuation, { references: uReferences });
+    return Δ(continuation, { callsites: uCallsites });
 }
 
 function receive(continuation, result, EID)
 {
-    const references = continuation.references;
-    const uReferences = references.remove(EID);
-    const uContinuation = Δ(continuation, { references: uReferences });
-console.log("NOW REFEREENCES: " + uReferences + " " + EID + " " + result);
-    return references
+    const callsites = continuation.callsites;
+    const uCallsites = callsites.remove(EID);
+    const uContinuation = Δ(continuation, { callsites: uCallsites });
+console.log("NOW REFEREENCES: " + uCallsites + " " + EID + " " + result);
+    return callsites
         .get(EID, List(Statement)())
         .reduce(accumUnblocked((continuation, statement) =>
             advance(continuation, statement, result)),
@@ -339,7 +359,7 @@ Task.Continuation.settle = function settle([completed, isolate], continuation)
     const uCompleted = completed;
 
     const referenced =
-        DenseIntSet.intersection(completed.EIDs, continuation.directReferences);
+        DenseIntSet.intersection(completed.EIDs, continuation.callsites.EIDs);
     const [uContinuation, unblocked, nCompleted] = DenseIntSet.reduce(
         accumUnblocked((continuation, EID) =>
             receive(continuation, completed.byEID.get(EID), EID)),
