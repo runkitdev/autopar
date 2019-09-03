@@ -1,214 +1,163 @@
-const { is, data, any, number, string, union } = require("@algebraic/type");
-const { List, Map, Set } = require("@algebraic/collections");
+const { Δ,  is, data, any, number, string, union, boolean, object } = require("@algebraic/type");
+const { List, Map, OrderedSet, Set } = require("@algebraic/collections");
 const Task = require("./task");
 const Independent = require("./independent");
 const KeyPath = require("@algebraic/ast/key-path");
 const until = require("@climb/until");
 const update = require("@cause/cause/update");
+const DenseIntSet = require("@algebraic/dense-int-set");
+const EIDMap = require("./eid-map");
 
+
+const Thenable = object;
+
+const ContentAddress    = string;
+const zeroed = T => [T, T()];
+
+
+const toSuccess = value => Task.Success({ value });
+const toFailure = error => Task.Failure({ errors: List(any)([error]) });
 
 const Isolate = data `Isolate` (
-    concurrency =>  number,
-    open        =>  List(Task),
-    running     =>  Map(string, Task),
-    memoized    =>  Map(string, Task),
-    finish      =>  Function,
-    settle      =>  Function );
+    settle              =>  Function,
+    entrypoint          =>  any,
+    memoizations        =>  zeroed(Map(ContentAddress, any)),
 
-const PromiseSettled = data `PromiseSettled` (
-    forContentAddress   =>  string,
-    completion          =>  Task.Completed );
+    EIDs            =>  [Map(string, number), Map(string, number)()],
+    nextEID         =>  [number, 1],
 
-PromiseSettled.from = (succeeded, forContentAddress, value) =>
-    (completion => PromiseSettled({ completion, forContentAddress }))
-    (succeeded ? Task.Success({ value }) : Task.Failure.Direct({ value }));
+    free            =>  [OrderedSet(number), OrderedSet(number)()],
+    occupied        =>  [Map(number, Thenable), Map(number, Thenable)()],
+    ([hasVacancy])  =>  [boolean, free => free.size > 0] );
 
+global.Isolate = Isolate;
 
-Isolate.update = update
+const Continuation = Task.Continuation;
 
-    .on(PromiseSettled, function (isolate, { forContentAddress, completion })
-    {console.log("SETTLING " + forContentAddress);
-        const memoizations = isolate.memoizations
-            .set(forContentAddress, completion);
-        const running = isolate.running.remove(forContentAddress);
-        const task = until(
-            task => !task.runningLeaves.has(forContentAddress),
-            task => update.in(
-                task,
-                [...task.runningLeaves.get(forContentAddress).first()],
-                completion)[0],
-            isolate.task);
-
-        const x = allot(Isolate({ ...isolate, task, memoizations, running }));
-    
-        console.log(task, task.runningLeaves.has(forContentAddress), completion);
-    
-        return x;
-    })
-
-    .on(Task.Completed, function (isolate, task)
-    {
-        return allot(isolate);
-    })
-
-module.exports = function run (task)
+module.exports = function run(entrypoint, concurrency = 2)
 {
     return new Promise(function (resolve, reject)
     {
-        const finish = task =>
-            is(Task.Success, task) ?
-                resolve(task.value) : reject(task);
-        const settle = (succeeded, forContentAddress) => value =>
-            isolate = update(isolate,
-                PromiseSettled.from(succeeded, forContentAddress, value));
+        const range = Array.from({ length: concurrency }, (_, index) => index);
+        const free = OrderedSet(number)(range);
+        const settle = (cast, slot, EID) => function (value)
+        {
+            isolate = Isolate.settle(isolate, cast(value), slot, EID);
+            
+            console.log("SO I GUSS WE FINISH WITH ", isolate.entrypoint);
+            bridge(resolve, reject, isolate.entrypoint);
+        }
 
-        let isolate = Isolate({ concurrency: 1, task, settle, finish });
-console.log(isolate);
-        isolate = allot(isolate);
-console.log(isolate);
+        const sIsolate = Isolate({ resolve, reject, entrypoint, free, settle });
+        const [uIsolate, uEntrypoint] =
+            Task.Continuation.start(sIsolate, entrypoint, 0);
+
+        let isolate = Δ(uIsolate, { entrypoint: uEntrypoint });
+        bridge(resolve, reject, uEntrypoint);
     });
 }
 
-async function fromPromiseCall(callee)
+function bridge(resolve, reject, entrypoint)
 {
-    return await callee();    
+    if (is (Task.Success, entrypoint))
+        return (resolve(entrypoint.value), true);
+
+    if (is (Task.Failure, entrypoint))
+        return (reject(entrypoint.errors.toArray()), true);
+
+    return false;
 }
 
-// return new isolate and functions to call
-/*function (taskRoot, running, concurrency)
+// invocation *intrinsically* unmemoizable
+// requested umemoizable
+// memoizable
+
+const Completed = data `Completed` (
+    byEID   => zeroed(Map(number, Task.Completed)),
+    EIDs    => [Array, DenseIntSet.Empty] );
+
+global.Completed = Completed;
+
+Completed.Empty = Completed();
+Completed.add = function (result, EID, completed)
 {
-    const { waitingLeaves } = task;
+    const uByEID = completed.byEID.set(EID, result);
+    const uEIDs = DenseIntSet.add(EID, completed.EIDs);
 
-    // There are no known tasks waiting for resources.
-    if (waitingLeaves.size <= 0)
-        return isolate;
-
-    // FIXME: Not necessarily true! We might be able to satisfy from memoizations.
-    if (isolate.running.size >= isolate.concurrency)
-        return isolate;
-
-    // FIXME: Order matters?
-    // Make sure to handle other waitings first? In order to simulate happening at the same time?
-    const [contentAddress, keyPaths] = waitingLeaves.entrySeq().first();
-    const keyPath = keyPaths.get(0);
-    const waiting = KeyPath.get(keyPath, task);
-
-    // Should we wait to move this when we confirm it's actually *in* running?
-    const runningTask = Independent.Running({ contentAddress });
-    const running = isolate.running.set(contentAddress, runningTask);
-
-    // More efficient to store just as keys without keyPaths?
-    const taskWithRunningLeaves = until(
-        task => !task.waitingLeaves.has(contentAddress),
-        task => update.in(
-            task,
-            [...task.waitingLeaves.get(contentAddress).first()],
-            runningTask)[0],
-        isolate.task);
-
-    fromPromiseCall(waiting.callee).then(
-        isolate.settle(true, contentAddress),
-        isolate.settle(false, contentAddress)).catch(e => console.log(e));
-
-    return Isolate({ ...isolate, running, task: taskWithRunningLeaves });
-}*/
-
-function allot(isolate)
-{
-    const { task } = isolate;
-
-    if (is (Task.Completed, task))
-        return isolate.finish(task);
-
-    if (
-
-    const { waitingLeaves } = task;
-
-    // There are no known tasks waiting for resources.
-    if (waitingLeaves.size <= 0)
-        return isolate;
-
-    // FIXME: Not necessarily true! We might be able to satisfy from memoizations.
-    if (task.runningLeaves.size >= isolate.concurrency)
-        return isolate;
-
-    // FIXME: Order matters?
-    // Make sure to handle other waitings first? In order to simulate happening at the same time?
-    const [contentAddress, keyPaths] = waitingLeaves.entrySeq().first();
-    const keyPath = keyPaths.get(0);
-    const waiting = KeyPath.get(keyPath, task);
-
-    // Should we wait to move this when we confirm it's actually *in* running?
-    const runningTask = Independent.Running({ contentAddress });
-    const running = isolate.running.set(contentAddress, runningTask);
-
-    // More efficient to store just as keys without keyPaths?
-    const taskWithRunningLeaves = until(
-        task => !task.waitingLeaves.has(contentAddress),
-        task => update.in(
-            task,
-            [...task.waitingLeaves.get(contentAddress).first()],
-            runningTask)[0],
-        isolate.task);
-
-    const result = invoke(waiting.invocation, isolate);
-    const leaf = is (Task.Dependent, result) ?
-        Task.Running({ ...result }) :
-        result;
-
-    const replaced = until(
-        task => !task.waitingLeaves.has(contentAddress),
-        task => update.in(
-            task,
-            [...task.waitingLeaves.get(contentAddress).first()],
-            result)[0],
-        isolate.task);
-    const memoizations = isolate.memoizations
-        .set(contentAddress, result);
-
-    return allot(Isolate({ memoizations, running, task: replaced }));
+    return Completed({ byEID: uByEID, EIDs: uEIDs });
 }
 
-function invoke(waiting, isolate)
-{
-    const { settle, memoizations } = isolate;
-    const { name, contentAddress, invocation } = waiting;
+Isolate.settle = function (isolate, result, slot, forEID)
+{console.log("SETTLING " + result);
+    // First off, make sure we free up this slot.
+    const uFree = isolate.free.add(slot);
+    const uOccupied = isolate.occupied.remove(slot);
 
-    if (memoizations.has(contentAddress))
-        return memoizations.get(contentAddress);
+    // If this was a memoizable execution, update the memoized result.
+    const contentAddress = isolate.EIDs.get(forEID, false);
+    const uMemoizations = contentAddress ?
+        isolate.memoizations.set(contentAddress, result) :
+        isolate.memoizations;
 
-    try
-    {
-        const result = invocation.callee.apply(
-            invocation.receiver,
-            invocation.arguments.toArray());
+    const uIsolate = Δ(isolate,
+        { free:uFree, occupied: uOccupied, memoizations: uMemoizations });
 
-        if (is (Task, result))
-            return of(result)({ ...result, name });
+    const completed = EIDMap.of(forEID, result);
+    const [[uCompleted, uuIsolate], uEntrypoint] =
+        Task.Continuation.settle([completed, uIsolate], isolate.entrypoint);
 
-        if (!isThenable(result))
-            return Task.Success({ name, value: result });
-
-        ensureAsyncThen(result).then(
-            settle(true, contentAddress),
-            settle(false, contentAddress));
-
-        return Task.Running({ name, contentAddress });
-    }
-    catch (value)
-    {
-        return Task.Failure.Direct({ name, value });
-    }
+    return Δ(uuIsolate, { entrypoint: uEntrypoint });
 }
 
-async function ensureAsyncThen(thenable)
+Isolate.activate = function (isolate, forContentAddress)
 {
-    return await thenable;
+    const EID = isolate.nextEID;
+
+    const uNextEID = EID + 1;
+    const uEIDs = forContentAddress !== false ?
+        isolate.EIDs.set(EID, forContentAddress) :
+        isolate.EIDs;
+
+    const uMemoizations = forContentAddress !== false ?
+        isolate.memoizations.set(forContentAddress, Task.Running({ EID })) :
+        isolate.memoizations;
+
+    const uIsolate = Δ(isolate,
+        { EIDs: uEIDs, nextEID: uNextEID, memoizations: uMemoizations });
+
+    return [uIsolate, EID];
 }
 
-function isThenable(value)
+Isolate.allot = function (isolate, thenable, EID)
 {
-    return !!value && typeof value.then === "function";
+    const slot = isolate.free.first();
+    const uFree = isolate.free.remove(slot);
+    const uOccupied = isolate.occupied.set(slot, thenable);
+
+    // We Promise wrap because we can't be sure that then() won't do something
+    // synchronously.
+    const wrapped = Promise.resolve(thenable);
+    const succeeded = isolate.settle(toSuccess, slot, EID);
+    const failed = isolate.settle(toFailure, slot, EID);
+
+    wrapped.then(succeeded, failed);
+
+    return Δ(isolate, { free: uFree, occupied: uOccupied });
 }
 
-// Running is a function of concurrency and previous running?
+
+/*
+    
+    if (ready.length <= 0)
+        return [graph, isolate];
+
+    const [uGraph, uIsolate, dependents] = ready
+        .reduce(run, [graph, isolate, DenseIntSet.Empty]);
+    const uCompleted = uGraph.completed;
+    const uReady = DenseIntSet
+        .toArray(dependents)
+        .filter(index => DenseIntSet
+            .isSubsetOf(uCompleted, nodes.get(index).dependencies));
+
+    return reduce(uGraph, uReady, uIsolate);*/
+//}

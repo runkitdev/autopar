@@ -2,7 +2,7 @@ console.log("huh");
 const plugin = require("@parallel-branch/babel-plugin");console.log("whata..");
 const transform = require("@babel/core").transform;
 const log_and_val = x => (console.log(x), eval(x));
-const run = require("@parallel-branch/task/run-2");
+const run = require("@parallel-branch/task/run");
 const take_time = () => Promise.resolve(7);
 const throw_it = x => Promise.reject(x);
 
