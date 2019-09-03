@@ -40,22 +40,53 @@ module.exports = function differentiate(f, bs)
             typeof b === "string" ? fromNamedBinding(b) :
             fail(`Branching derivatives can only be taken with respect to ` +
                 `named or indexed parameter`));
-console.log(variables);
+
     const uBody = variables
         .reduce((body, variable) =>
             body.freeVariables
                 .get(variable, List(KeyPath)())
                 .reduce((body, keyPath) =>
-                    KeyPath.update(t.branch, keyPath, body),
+                    KeyPath.updateJust(t.branch, -1, keyPath, body),
                     body),
             body);
     const dfExpression = Δ(fExpression, { body: uBody });
+    console.log(generate(dfExpression));
     const transformed = require("./differentiate")(dfExpression);
+
 	const instantiate = new Function("δ", `return ${generate(transformed)}`);
 
     return instantiate(δ);
 }
+/*
+function _(keyPath, body)
+{
+    return KeyPath.updateJust(-1, keyPath, body)
+    const [ancestor, remaining] = KeyPath.getJust(-1, keyPath, body);
+    
+    
+    const targetCall = ancestor.arguments[0];
 
+    if ()
+
+    const isWrapped = targetCall.callee.name === "wrapped";
+    const trueCall = isWrapped ? targetCall.arguments[0] : targetCall;
+    const trueCallee = trueCall.callee;
+    const receiver = !is (Node.MemberExpression, trueCallee) ?
+        trueCallee :
+        toArrayExpression(
+            trueCallee.object,
+            is (Node.ComputedMemberExpression, trueCallee) ?
+                trueCallee.property :
+                Node.StringLiteral({ value: trueCallee.property.name }));
+
+    const invocation =
+        toArrayExpression(receiver, toArrayExpression(...trueCall.arguments));
+
+    return [-1, invocation, ancestor, isWrapped];
+    
+    KeyPath.updateJust(keyPath, -1)
+}
+*/
 function toMaybeIdentifierBinding(pattern)
 {
     if (is (Node.IdentifierPattern, pattern))
