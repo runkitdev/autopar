@@ -111,7 +111,7 @@ parallel function d(one, two)
 })();*/
 (async function ()
 {
-    try { await run(fib(14)); }
+    try { console.log("RESULT: " + (await fib(14))); }
     catch (e) { console.log("GOT: " + e); }
 })();
 

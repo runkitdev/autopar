@@ -310,7 +310,7 @@ function invoke(invocation)
 
 function isThenable(value)
 {
-    return !!value && typeof value.then === "function";
+    return !!value && !is (Task.Called, value) && typeof value.then === "function";
 }
 
 module.exports = Task;

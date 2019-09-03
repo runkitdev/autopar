@@ -34,7 +34,7 @@ global.Isolate = Isolate;
 
 const Continuation = Task.Continuation;
 
-module.exports = function run(entrypoint, concurrency = 2)
+function run(entrypoint, concurrency = 2)
 {
     return new Promise(function (resolve, reject)
     {
@@ -56,6 +56,8 @@ module.exports = function run(entrypoint, concurrency = 2)
         bridge(resolve, reject, uEntrypoint);
     });
 }
+
+module.exports = run;
 
 function bridge(resolve, reject, entrypoint)
 {
@@ -145,6 +147,16 @@ Isolate.allot = function (isolate, thenable, EID)
     return Δ(isolate, { free: uFree, occupied: uOccupied });
 }
 
+
+Task.Called.prototype.then = function (onResolve, onReject)
+{
+    return run(this).then(onResolve, onReject);
+}
+
+Task.Called.prototype.catch = function (onReject)
+{
+    return run(this).catch(onReject);
+}
 
 /*
     
