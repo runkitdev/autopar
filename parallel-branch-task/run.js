@@ -8,12 +8,12 @@ const update = require("@cause/cause/update");
 
 
 const Isolate = data `Isolate` (
-    concurrency         =>  number,
-    task                =>  Task,
-    memoizations        =>  [Map(string, any), Map(string, any)()],
-    running             =>  [Map(string, Task), Map(string, Task)()],
-    finish              =>  Function,
-    settle              =>  Function );
+    concurrency =>  number,
+    open        =>  List(Task),
+    running     =>  Map(string, Task),
+    memoized    =>  Map(string, Task),
+    finish      =>  Function,
+    settle      =>  Function );
 
 const PromiseSettled = data `PromiseSettled` (
     forContentAddress   =>  string,
@@ -53,8 +53,6 @@ Isolate.update = update
 
 module.exports = function run (task)
 {
-
-
     return new Promise(function (resolve, reject)
     {
         const finish = task =>
@@ -76,13 +74,9 @@ async function fromPromiseCall(callee)
     return await callee();    
 }
 
-function allot(isolate)
+// return new isolate and functions to call
+/*function (taskRoot, running, concurrency)
 {
-    const { task } = isolate;
-
-    if (is (Task.Completed, task))
-        return isolate.finish(task);
-
     const { waitingLeaves } = task;
 
     // There are no known tasks waiting for resources.
@@ -98,7 +92,7 @@ function allot(isolate)
     const [contentAddress, keyPaths] = waitingLeaves.entrySeq().first();
     const keyPath = keyPaths.get(0);
     const waiting = KeyPath.get(keyPath, task);
-    
+
     // Should we wait to move this when we confirm it's actually *in* running?
     const runningTask = Independent.Running({ contentAddress });
     const running = isolate.running.set(contentAddress, runningTask);
@@ -117,6 +111,104 @@ function allot(isolate)
         isolate.settle(false, contentAddress)).catch(e => console.log(e));
 
     return Isolate({ ...isolate, running, task: taskWithRunningLeaves });
+}*/
+
+function allot(isolate)
+{
+    const { task } = isolate;
+
+    if (is (Task.Completed, task))
+        return isolate.finish(task);
+
+    if (
+
+    const { waitingLeaves } = task;
+
+    // There are no known tasks waiting for resources.
+    if (waitingLeaves.size <= 0)
+        return isolate;
+
+    // FIXME: Not necessarily true! We might be able to satisfy from memoizations.
+    if (task.runningLeaves.size >= isolate.concurrency)
+        return isolate;
+
+    // FIXME: Order matters?
+    // Make sure to handle other waitings first? In order to simulate happening at the same time?
+    const [contentAddress, keyPaths] = waitingLeaves.entrySeq().first();
+    const keyPath = keyPaths.get(0);
+    const waiting = KeyPath.get(keyPath, task);
+
+    // Should we wait to move this when we confirm it's actually *in* running?
+    const runningTask = Independent.Running({ contentAddress });
+    const running = isolate.running.set(contentAddress, runningTask);
+
+    // More efficient to store just as keys without keyPaths?
+    const taskWithRunningLeaves = until(
+        task => !task.waitingLeaves.has(contentAddress),
+        task => update.in(
+            task,
+            [...task.waitingLeaves.get(contentAddress).first()],
+            runningTask)[0],
+        isolate.task);
+
+    const result = invoke(waiting.invocation, isolate);
+    const leaf = is (Task.Dependent, result) ?
+        Task.Running({ ...result }) :
+        result;
+
+    const replaced = until(
+        task => !task.waitingLeaves.has(contentAddress),
+        task => update.in(
+            task,
+            [...task.waitingLeaves.get(contentAddress).first()],
+            result)[0],
+        isolate.task);
+    const memoizations = isolate.memoizations
+        .set(contentAddress, result);
+
+    return allot(Isolate({ memoizations, running, task: replaced }));
+}
+
+function invoke(waiting, isolate)
+{
+    const { settle, memoizations } = isolate;
+    const { name, contentAddress, invocation } = waiting;
+
+    if (memoizations.has(contentAddress))
+        return memoizations.get(contentAddress);
+
+    try
+    {
+        const result = invocation.callee.apply(
+            invocation.receiver,
+            invocation.arguments.toArray());
+
+        if (is (Task, result))
+            return of(result)({ ...result, name });
+
+        if (!isThenable(result))
+            return Task.Success({ name, value: result });
+
+        ensureAsyncThen(result).then(
+            settle(true, contentAddress),
+            settle(false, contentAddress));
+
+        return Task.Running({ name, contentAddress });
+    }
+    catch (value)
+    {
+        return Task.Failure.Direct({ name, value });
+    }
+}
+
+async function ensureAsyncThen(thenable)
+{
+    return await thenable;
+}
+
+function isThenable(value)
+{
+    return !!value && typeof value.then === "function";
 }
 
 // Running is a function of concurrency and previous running?
