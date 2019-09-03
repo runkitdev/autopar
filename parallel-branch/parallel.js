@@ -1,16 +1,20 @@
-const { is, string, fail } = require("@algebraic/type");
-const { Set } = require("@algebraic/collections");
+const { Δ, is, string, fail } = require("@algebraic/type");
+const { List, Set } = require("@algebraic/collections");
 
 const Node = require("@algebraic/ast");
 const parse = require("@algebraic/ast/parse");
+const KeyPath = require("@algebraic/ast/key-path");
 
-const { KeyPathsByName } = require("@algebraic/ast/key-path");
+const t = require("./templates");
+const generate = node => require("@babel/generator").default(node).code;
+
+const δ = require("./δ");
 
 
 module.exports = function differentiate(f, bs)
 {
     const fExpression = parse.expression(f + "");
-    const { id, params: parameters } = fExpression;
+    const { id, params: parameters, body } = fExpression;
 
     const numberedBindings = parameters
         .map(toMaybeIdentifierBinding);
@@ -36,10 +40,21 @@ module.exports = function differentiate(f, bs)
             typeof b === "string" ? fromNamedBinding(b) :
             fail(`Branching derivatives can only be taken with respect to ` +
                 `named or indexed parameter`));
+console.log(variables);
+    const uBody = variables
+        .reduce((body, variable) =>
+            body.freeVariables
+                .get(variable, List(KeyPath)())
+                .reduce((body, keyPath) =>
+                    KeyPath.update(t.branch, keyPath, body),
+                    body),
+            body);
+    const dfExpression = Δ(fExpression, { body: uBody });
+    const transformed = require("./differentiate")(dfExpression);
+	const instantiate = new Function("δ", `return ${generate(transformed)}`);
 
-    console.log("--> " + variables);   
+    return instantiate(δ);
 }
-
 
 function toMaybeIdentifierBinding(pattern)
 {

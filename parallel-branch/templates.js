@@ -11,10 +11,13 @@ exports.kTryCatch = parse.expression("δ.tryCatch");
 const tCall = (callee, ...args) =>
     Node.CallExpression({ callee, arguments: args });
 
+exports.call = tCall;
+
 const kBranch = Node.IdentifierExpression({ name: "branch" });
 const tBranch = fExpression => tCall(kBranch, fExpression);
 
 exports.tBranch = tBranch;
+exports.branch = tBranch;
 
 const kBranching = Node.IdentifierExpression({ name: "branching" });
 const tBranching = fExpression => tCall(kBranching, fExpression);
