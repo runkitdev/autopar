@@ -16,11 +16,6 @@ const tBranch = fExpression => tCall(kBranch, fExpression);
 
 exports.tBranch = tBranch;
 
-const kWrapped = Node.IdentifierExpression({ name: ":wrapped" });
-const tBranchWrapped = fExpression => tBranch(tCall(kWrapped, fExpression));
-
-exports.tBranchWrapped = tBranchWrapped;
-
 const kBranching = Node.IdentifierExpression({ name: "branching" });
 const tBranching = fExpression => tCall(kBranching, fExpression);
 
