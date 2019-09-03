@@ -39,7 +39,7 @@ module.exports = function spawn(command, args = [], options = { })
                 reject(ExitCodeError({ ...output, exitCode, stack })) :
                 resolve(Result({ ...output, exitCode })));
 
-        process.stdout.on("data", data => output.stdout += data);
+        process.stdout.on("data", data => (console.log(data+""), output.stdout += data));
         process.stderr.on("data", data => output.stderr += data);
     });
 }
