@@ -69,9 +69,6 @@ Task.Continuation           =   data `Task.Continuation` (
     scope                   =>  Scope,
     completed               =>  [Array /*DenseIntSet*/, DenseIntSet.Empty],
 
-// originating, creaetor? initiating, genesis
-// "callsite of origin"
-
     callsites               =>  zeroed(EIDMap),
     children                =>  zeroed(List(Task.Continuation)),
     ([references])          =>  [Array /*DenseIntSet*/,
@@ -82,27 +79,6 @@ Task.Continuation           =   data `Task.Continuation` (
     
     ([running])             =>  [boolean, callsites => callsites.size > 0],
 
-/*
-    branchDependents        =>  [EIDMap, EIDMap()],
-    referencedBranches      =>  [Array /*DenseIntSet*, DenseIntSet.Empty],
-    concreteBranches        =>  zeroed(List(Task.Continuation)),
-*/
-/*
-    children                =>  zeroed(List(Task.Continuation)),
-    references              =>  zeroed(Map(number, List(Statement))),
-
-    ([directReferences])    =>  [Array, references =>
-                                    DenseIntSet.from([...references.keySeq()])],
-    ([indirectReferences])  =>  [Array, children =>
-                                    children.reduce((references, child) =>
-                                        DenseIntSet.union(
-                                            child.indirectReferences,
-                                            DenseIntSet.add(EID, references)),
-                                        DenseIntSet.Empty)],
-
-    ([running])             =>  [boolean, (children, references) =>
-                                    children.size + references.size > 0],
-*/
     errors                  =>  zeroed(List(any)),
     result                  =>  [any, void(0)]
 
