@@ -1,7 +1,7 @@
 const flatMap = require("@climb/flat-map");
 const fromEntries = require("@climb/from-entries");
 
-const { data, number, union, string, is, type } = require("@algebraic/type");
+const { data, number, union, string, is, type, boolean } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
 const fromBabel = require("@algebraic/ast/from-babel");
@@ -63,6 +63,7 @@ const isIdentifierExpression = (name, node) =>
 const BranchExpression      = data `BranchExpression` (
     name                    =>  string,
     expression              =>  Node.Expression,
+    wrapped                 =>  boolean,
     ([blockBindingNames])   =>  [KeyPathsByName,
                                     name => KeyPathsByName.just(name)],
     ([freeVariables])       =>  [KeyPathsByName,
@@ -147,7 +148,7 @@ function toSerializedTaskNode(functionBindingNames, dependentData)
     const { dependencies, dependents, node } = dependentData;
     const [description, ...bodyStatements] =
         is (BranchExpression, node) ?
-            [[2, node.name], tReturn(node.expression)] :
+            [[2, node.name, node.wrapped], tReturn(node.expression)] :
         is (Node.ReturnStatement, node) ?
             [[1], node] :
         [[0], node, tReturn(tShorthandObject(node.blockBindingNames.keySeq()))];
@@ -265,7 +266,7 @@ function toTaskNodes(statement)
     const branchIsLonger =
         firstBranchKeyPath.length > firstBranchingKeyPath.length - 2;
     const keyPath = branchIsLonger ? firstBranchKeyPath : firstBranchingKeyPath;
-    const [insertionPoint, newChild, ancestor] = branchIsLonger ?
+    const [insertionPoint, newChild, ancestor, wrapped] = branchIsLonger ?
         fromBranch(keyPath, statement) :
         fromBranching(keyPath, statement);
 
@@ -275,11 +276,11 @@ function toTaskNodes(statement)
         const { id, init } = declarator;
 
         if (init === ancestor && is (Node.IdentifierPattern, id))
-            return [BranchExpression({ name: id.name, expression: newChild })];
+            return [BranchExpression({ name: id.name, expression: newChild, wrapped })];
     }
 
     const name = "MADE_UP_" + (global_num++);
-    const task = BranchExpression({ name, expression: newChild });
+    const task = BranchExpression({ name, expression: newChild, wrapped });
     const variable = Node.IdentifierExpression({ name });
     const replaced = KeyPath.setJust(insertionPoint, keyPath, variable, statement);
 
@@ -294,8 +295,10 @@ function toArrayExpression(...elements)
 function fromBranch(keyPath, statement)
 {
     const [ancestor, remainingKeyPath] = KeyPath.getJust(-1, keyPath, statement);
+    const targetCall = ancestor.arguments[0];
 
-    const trueCall = ancestor.arguments[0];
+    const isWrapped = targetCall.callee.name === "wrapped";
+    const trueCall = isWrapped ? targetCall.arguments[0] : targetCall;
     const trueCallee = trueCall.callee;
     const receiver = !is (Node.MemberExpression, trueCallee) ?
         trueCallee :
@@ -304,12 +307,11 @@ function fromBranch(keyPath, statement)
             is (Node.ComputedMemberExpression, trueCallee) ?
                 trueCallee.property :
                 Node.StringLiteral({ value: trueCallee.property.name }));
-//console.log(require("@babel/generator").default(ancestor).code);
-//console.log(trueCall.arguments);
+
     const invocation =
         toArrayExpression(receiver, toArrayExpression(...trueCall.arguments));
 
-    return [-1, invocation, ancestor];
+    return [-1, invocation, ancestor, isWrapped];
 }
 
 function fromBranching(keyPath, statement)
@@ -331,7 +333,7 @@ function fromBranching(keyPath, statement)
     const autoBranchKeyPath = autoBranch.freeVariables.get("branch").get(0);
     const [, autoDeBranched] = fromBranch(autoBranchKeyPath, autoBranch);
 
-    return [-3, autoDeBranched, ancestor];
+    return [-3, autoDeBranched, ancestor, false];
 }
 
 function fromCascadingIfStatements(statements)

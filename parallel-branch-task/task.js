@@ -237,11 +237,19 @@ console.log("NOW REFEREENCES: " + uCallsites + " " + EID + " " + result);
 }
 
 function advance(continuation, statement, result)
-{console.log(continuation, statement, result);
-    return is (Task.Failure, result) ?
-        fail(continuation, result.errors) :
-        updateScope(continuation, statement,
-            { [statement.operation.binding]: result.value });
+{
+    const succeeded = is (Task.Success, result);
+    const { binding, wrapped } = statement.operation;
+
+    if (!succeeded && !wrapped)
+        return fail(continuation, result.errors);
+
+    const value = wrapped ?
+        [succeeded, succeeded ? result.value : result.errors] :
+        result.value;
+if (wrapped)
+    console.log("NOW WRAPPED:" + value);
+    return updateScope(continuation, statement, { [binding]: value });
 }
 
 function fail(continuation, errors)

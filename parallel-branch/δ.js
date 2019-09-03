@@ -66,7 +66,34 @@ function taskApply(f, thisArg, args)
             f.apply(thisArg, args) :
             Task.fromResolvedCall(thisArg, f, args);
 }
+
+module.exports.tryCatch = (function ()
+{
+	const differentiate = require("./differentiate");
+	const parse = require("@algebraic/ast/parse");
+	const generate = node => require("@babel/generator").default(node).code;
+
+	const tryCatch = function tryCatch(block, handler)
+	{
+		const [succeeded, value] = branch(wrapped(block()));
+
+		return succeeded ? value : branch(handler(value));
+	};
+	const transformed = differentiate(parse.expression(tryCatch + ""));
+	const generateTryCatch = new Function("δ", `return ${generate(transformed)}`);
+
+	return generateTryCatch(module.exports);
+})();
+
 /*
+module.exports.try = function (result, recover)
+{
+	if (is (Task.Failure, result))
+		return branch recover(result.errors);
+
+	return result.value;
+}
+
 module.exports.guard = Task.taskReturning(function guard(attempt, recover)
 {
     return Dependent.fromCall(

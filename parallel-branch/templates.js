@@ -6,15 +6,25 @@ const Node = require("@algebraic/ast/node");
 const parse = require("@algebraic/ast/parse");
 const valueToExpression = require("@algebraic/ast/value-to-expression");
 
-const kBranch = Node.IdentifierExpression({ name: "branch" });
+exports.kTryCatch = parse.expression("δ.tryCatch");
 
-exports.tBranch = fExpression => Node.CallExpression
-    ({ callee: kBranch, arguments: [fExpression] });
+const tCall = (callee, ...args) =>
+    Node.CallExpression({ callee, arguments: args });
+
+const kBranch = Node.IdentifierExpression({ name: "branch" });
+const tBranch = fExpression => tCall(kBranch, fExpression);
+
+exports.tBranch = tBranch;
+
+const kWrapped = Node.IdentifierExpression({ name: ":wrapped" });
+const tBranchWrapped = fExpression => tBranch(tCall(kWrapped, fExpression));
+
+exports.tBranchWrapped = tBranchWrapped;
 
 const kBranching = Node.IdentifierExpression({ name: "branching" });
+const tBranching = fExpression => tCall(kBranching, fExpression);
 
-exports.tBranching = fExpression => Node.CallExpression
-    ({ callee: kBranching, arguments: [fExpression] });
+exports.tBranching = tBranching;
 
 exports.tOperators = fromEntries(["?:", "||", "&&"]
     .map(name => [name, parse.expression(`δ.operators["${name}"]`)]));

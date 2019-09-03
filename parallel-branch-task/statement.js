@@ -1,4 +1,4 @@
-const { data, number, string } = require("@algebraic/type");
+const { data, number, string, boolean } = require("@algebraic/type");
 const union = require("@algebraic/type/union-new");
 const DenseIntSet = Array;
 
@@ -20,7 +20,8 @@ const Operation     =   union `Operation` (
 Operation.Step      =   data `Operation.Step` ();
 Operation.Return    =   data `Operation.Return` ();
 Operation.Branch    =   data `Operation.Branch` (
-    binding         =>  string );
+    binding         =>  string,
+    wrapped         =>  boolean );
 
 Statement.Operation =   Operation;
 
@@ -28,7 +29,7 @@ Operation.deserialize = function (opcode, ...rest)
 {
     return  opcode === 0 ? Operation.Step :
             opcode === 1 ? Operation.Return :
-            Operation.Branch({ binding: rest[0] });
+            Operation.Branch({ binding: rest[0], wrapped: rest[1] });
 }
 
 Statement.deserialize = function (serialized, address)

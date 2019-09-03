@@ -12,7 +12,8 @@ const branches = node =>
     freeVariables("branch", node).size > 0 ||
     freeVariables("branching", node).size > 0;
 
-const { tArrowFunctionWrap, tBranch, tBranching, tOperators, tGuard } = require("./templates");
+const t = require("./templates");
+const { tArrowFunctionWrap, tBranch, tBranching, tOperators } = require("./templates");
 
 
 module.exports = map(
@@ -29,7 +30,7 @@ module.exports = map(
         });
         const expression = Node.CallExpression(
         {
-            callee: tGuard,
+            callee: t.kTryCatch,
             arguments: [fromFunction(fBlock), fromFunction(fHandler)]
         });
 
