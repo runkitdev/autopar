@@ -378,14 +378,11 @@ console.log("UNBLOCKED: [" + unblocked + "]" + " [" + referenced + "]" + uuConti
     const [uuIsolate, uuuContinuation] =
         Task.Continuation.update(isolate, uuContinuation, unblocked);
 console.log("BUT NOW: " + uuuContinuation);
-    if (is (Task.Completed, uuuContinuation))
-    {
-        const uuCompleted = uCompleted.set(EID, uuuContinuation);
-console.log(uuCompleted);
-        return [[uuCompleted, uuIsolate], uuuContinuation];
-    }
+    const uuCompleted = is (Task.Completed, uuuContinuation) ?
+        uCompleted.set(EID, uuuContinuation) :
+        uCompleted;
 
-    return [[uCompleted, uuIsolate], uuuContinuation];
+    return [[uuCompleted, uuIsolate], uuuContinuation];
 }
 
 // branches { EID -> Statement.Branch }
