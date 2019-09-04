@@ -10,9 +10,7 @@ const dMap = parallel function (df, thisArg)
 
     // FIXME: We need this because we can't tell f.call is equivalent to f()
     // in differentiate.
-    count && console.log("[[[", mapToList);
     const dfThised = (...args) => df.apply(thisArg, args);
-    dfThised && console.log(dfThised, List, δ(mapToList, [0]).name);
     const mappedList = mapToList(branching dfThised, array, thisArg, List, 0, count);
 
     return List.toArray(mappedList, count);
@@ -29,8 +27,6 @@ precomputed (Array.prototype.map, [0], dMap);
 
 function mapToList(f, array, thisArg, List, index, count)
 {
-    console.log("THIS FAR!");
-//    console.log(mapToList, f, List);
     return  index === count ?
             false :
             new List(

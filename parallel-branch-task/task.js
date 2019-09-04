@@ -37,6 +37,7 @@ Task.Running            =   data `Task.Running` (
     EID                 =>  number );
 
 Task.Definition             =   data `Task.Definition` (
+    name                    =>  string,
     statements              =>  array(Statement),
     ([complete])            =>  [Array, statements =>
                                     DenseIntSet.inclusive(statements.length)],
@@ -335,13 +336,13 @@ function fMapAccum(...args)
 // They can be unblocked of course.
 // Should we just check for done here instead of update?
 Task.Continuation.settle = function settle([completed, isolate], continuation)
-{console.log("WELL TRYING " + continuation); 
+{//console.log("WELL TRYING " + continuation);
     if (!DenseIntSet.intersects(continuation.references, completed.EIDs))
         return [[completed, isolate], continuation];
 
-console.log("I AM " + continuation.EID);
+//console.log("I AM " + continuation.EID);
 
-    const { EID, callsites, children } = continuation;console.log(children);
+    const { EID, callsites, children } = continuation;//console.log(children);
     const [, [[uCompleted, uIsolate], uChildren]] = until(
         ([handled, [[completed]]]) => handled.size === completed.size,
         ([_, [[completed, isolate], children]]) =>
@@ -358,10 +359,10 @@ console.log("I AM " + continuation.EID);
             receive(continuation, uCompleted.byEID.get(EID), EID)),
         [uContinuation, DenseIntSet.Empty],
         referenced);
-console.log("UNBLOCKED: [" + unblocked + "]" + " [" + referenced + "]" + uuContinuation);
+//console.log("UNBLOCKED: [" + unblocked + "]" + " [" + referenced + "]" + uuContinuation);
     const [uuIsolate, uuuContinuation] =
         Task.Continuation.update(isolate, uuContinuation, unblocked);
-console.log("BUT NOW: " + uuuContinuation);
+//console.log("BUT NOW: " + uuuContinuation);
     const uuCompleted = is (Task.Completed, uuuContinuation) ?
         uCompleted.set(EID, uuuContinuation) :
         uCompleted;

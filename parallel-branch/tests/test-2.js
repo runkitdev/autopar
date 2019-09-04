@@ -4,8 +4,57 @@ const log_and_val = x => (console.log(x), eval(x));
 const run = require("@parallel-branch/task/run");
 const take_time = () => Promise.resolve(7);
 const throw_it = x => Promise.reject(x);
+const delay = timeout => new Promise(resolve => setTimeout(timeout, resolve));
 
 log_and_val(transform(`
+function id(x)
+{
+    return x;
+}
+/*
+parallel function m()
+{
+    return [0,0,0].map(branching id);
+}*/
+
+parallel function fib(x)
+{
+    if (x <= 1)
+        return 1;
+
+    return branch fib(x - 1) + branch fib(x - 2);
+}
+
+parallel function many_fib()
+{
+    return [0,1,2,3,4,5,6,7,8,9].map(branching fib);
+}
+
+parallel function recurse(m, x)
+{
+    return (branch m(x) === 0) ? branch (() => "yes")() : (branch recurse(m, x - 1));
+}
+
+(async function ()
+{
+    try {
+//        console.log(await m());
+//        console.log(await recurse(id, 2));
+        console.log(await many_fib());
+    }
+    catch (e) { console.log("GOT: ", e); }
+})();
+
+`, { plugins: [plugin]/*, generatorOpts: { concise:true }*/ }).code);
+
+/*
+                console.log("ERRORS: " + errors);
+                
+                return 8;
+
+*/
+
+/*
 
 parallel function simple()
 {
@@ -82,7 +131,7 @@ parallel function d(one, two)
 	const b = branch o();
 	const { c, d } = branch b(a);
 
-	return a + branch h() + c;*/
+	return a + branch h() + c;*//*
 }
 
 //console.log(d().nodes.get(0).action+"");
@@ -112,7 +161,7 @@ parallel function d(one, two)
 {
     try { console.log("RESULT: " + (await fib(14))); }
     catch (e) { console.log("GOT: " + e); }
-})();*/
+})();
 
 parallel function a()
 {
@@ -140,25 +189,4 @@ parallel function call(f, x)
 {
     return branch f(x);
 }
-
-parallel function m()
-{
-    return [0].map(branching fib);
-}
-
-(async function ()
-{
-    try {
-        console.log(await m());
-    }
-    catch (e) { console.log("GOT: ", e); }
-})();
-
-`, { plugins: [plugin]/*, generatorOpts: { concise:true }*/ }).code);
-
-/*
-                console.log("ERRORS: " + errors);
-                
-                return 8;
-
 */

@@ -118,6 +118,7 @@ function fromFunction(functionNode)
     const useStrict = Node.StringLiteral({ value: "use strict" });
     const definitionDeclaration = tConst("definition", tCall(kDefine,
     [
+        valueToExpression(functionNode.id ? functionNode.id.name : ""),
         valueToExpression(initiallyUnblocked),
         ...dependentData.map(data =>
             toSerializedTaskNode(functionBindingNames, data))

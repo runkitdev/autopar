@@ -29,11 +29,11 @@ module.exports.parallel = function parallel(f)
     return Task.taskReturning(f);
 }
 
-module.exports.define = function (entrypoints, ...serialized)
+module.exports.define = function (name, entrypoints, ...serialized)
 {
 	const statements = serialized.map(Statement.deserialize);
 
-	return Task.Definition({ entrypoints, statements });
+	return Task.Definition({ name, entrypoints, statements });
 }
 
 module.exports.call = function (definition, thisArg, initialBindings)
@@ -118,10 +118,10 @@ module.exports.operators =
             test ? consequent() : alternate(),
 
         (test, branchingConsequent, alternate) =>
-            test ? branchingConsequent() : success(alternate()),
+            test ? branchingConsequent() : alternate(),
 
         (test, consequent, branchingAlternate) =>
-            test ? success(consequent()) : branchingAlternate(),
+            test ? consequent() : branchingAlternate(),
 
         (test, branchingConsequent, branchingAlternate) =>
             test ? branchingConsequent() : branchingAlternate() ),

@@ -9,10 +9,10 @@ const Task = require("@parallel-branch/task");
 
 const parallelize = (function ()
 {
-    const compute = (f, bs) => fail("Not implemented");
+    const compute = (f, bs) => fail("Not implemented for " + f);
 
     return function parallelize(f, bs)
-    {console.log("WILL TRY TO PARALLELIZE ", f+"", bs, toCacheKey(bs));
+    {
         const cache =
             f[CacheSymbol] ||
             (f[CacheSymbol] = Object.create(null));
@@ -52,6 +52,9 @@ module.exports.precomputed = precomputed;
 
 function wrapped(name, bs, bf)
 {
+    // UGH: WITHOUT THIS, bf.apply(this, args) gets passed global.
+    "use strict";
+
     const bname = `[∂branching/${bs.map(b => `∂${b}`).join("")}](${name})`;
 
     return fNamed(bname, function (...args)
