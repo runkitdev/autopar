@@ -12,7 +12,7 @@ const parallelize = (function ()
     const compute = (f, bs) => fail("Not implemented");
 
     return function parallelize(f, bs)
-    {
+    {console.log("WILL TRY TO PARALLELIZE ", f+"", bs, toCacheKey(bs));
         const cache =
             f[CacheSymbol] ||
             (f[CacheSymbol] = Object.create(null));
@@ -29,8 +29,8 @@ module.exports.parallelize = parallelize;
 
 module.exports.apply = (signature, bs, args) =>
 {
-    if (!isArray(signature))
-        return parallelize(signature)(...args);
+    if (signature.length === 1)
+        return parallelize(signature[0], bs)(...args);
 
     const [object, property] = signature;
 

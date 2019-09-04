@@ -1,5 +1,4 @@
-console.log("huh");
-const plugin = require("@parallel-branch/babel-plugin");console.log("whata..");
+const plugin = require("@parallel-branch/babel-plugin");
 const transform = require("@babel/core").transform;
 const log_and_val = x => (console.log(x), eval(x));
 const run = require("@parallel-branch/task/run");
@@ -101,18 +100,65 @@ parallel function d(one, two)
 //console.log(run(simpler()));
 /*(async function ()
 {
-    console.log(await run(time_taker()));
+    console.log(await time_taker());
 })();
-/*
+
 (async function ()
 {
-    try { await run(call_one_exception()); console.log("heree?"); }
+    try { await call_one_exception(); console.log("here?"); }
     catch (e) { console.log("GOT: " + e); }
-})();*/
+})();
 (async function ()
 {
     try { console.log("RESULT: " + (await fib(14))); }
     catch (e) { console.log("GOT: " + e); }
+})();*/
+
+parallel function a()
+{
+    try
+    {
+        throw Error("hi!");
+    }
+    catch (errors)
+    {
+        console.log("IN HERE WITH " + errors);
+    }
+}
+
+parallel function b(x)
+{
+    return x < 1 ? x : branch b(x - 1);
+}
+
+parallel function c(x)
+{
+    return x || branch b(x - 1);
+}
+
+parallel function call(f, x)
+{
+    return branch f(x);
+}
+
+parallel function m()
+{
+    return [0].map(branching fib);
+}
+
+(async function ()
+{
+    try {
+        console.log(await m());
+    }
+    catch (e) { console.log("GOT: ", e); }
 })();
 
 `, { plugins: [plugin]/*, generatorOpts: { concise:true }*/ }).code);
+
+/*
+                console.log("ERRORS: " + errors);
+                
+                return 8;
+
+*/

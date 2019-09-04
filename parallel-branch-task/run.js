@@ -34,7 +34,7 @@ global.Isolate = Isolate;
 
 const Continuation = Task.Continuation;
 
-function run(entrypoint, concurrency = 2)
+function run(entrypoint, concurrency = 8)
 {
     return new Promise(function (resolve, reject)
     {

@@ -22,6 +22,7 @@ exports.branch = tBranch;
 const kBranching = Node.IdentifierExpression({ name: "branching" });
 const tBranching = fExpression => tCall(kBranching, fExpression);
 
+exports.branching = tBranching;
 exports.tBranching = tBranching;
 
 exports.tOperators = fromEntries(["?:", "||", "&&"]

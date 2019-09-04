@@ -1,3 +1,5 @@
+require("./require-internal");
+
 const { isArray, from: ArrayFrom } = Array;
 
 const { any, number } = require("@algebraic/type");
@@ -14,6 +16,11 @@ const DenseIntSet = require("@algebraic/dense-int-set");
 const { parallelize, operator, precomputed } = require("./parallelize");
 const success = value => Task.Success({ name:"mm", value });
 const aggregate = failures => Task.Failure.Aggregate({ name:"d", failures });
+
+module.exports = function (...args)
+{
+	return require("./parallel")(...args);
+}
 
 module.exports.success = success;
 
@@ -146,26 +153,7 @@ module.exports.operators =
                 [branchingLeft, []]) )
 }
 
-precomputed (Array.prototype.map, [0], function (f, thisArg)
-{
-    // f.apply(null || undefined) just uses the default this, so don't bother
-    // with the indrection in that case.
-    const fApplied = (...args) => taskApply(f, thisArg, args);
-
-    // We use Array.from (instead of `this.map`) in case `this` is some weird
-    // subclass. In that case, `this.map` would also be that subclass and
-    // `depend()` expects an array.
-    const tasks = ArrayFrom(this, fApplied);
-
-    // Dependent will call us with the resolved tasks, so now do a "mock" map
-    // to return the those elements.
-    const callee = (succeeded, results) =>
-        succeeded ?
-            success(this.map((_, index) => results.get(index).value)) :
-            aggregate(results);
-
-    return Dependent.fromCall(callee, tasks, None);
-});
+require("./map");
 
 /*
 module.exports = δ;

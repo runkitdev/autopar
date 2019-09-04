@@ -41,21 +41,29 @@ module.exports = function differentiate(f, bs)
             fail(`Branching derivatives can only be taken with respect to ` +
                 `named or indexed parameter`));
 
+    const freeVariables = body.freeVariables;
     const uBody = variables
-        .reduce((body, variable) =>
-            body.freeVariables
-                .get(variable, List(KeyPath)())
-                .reduce((body, keyPath) =>
-                    KeyPath.updateJust(t.branch, -1, keyPath, body),
-                    body),
+        .reduce((body, variable) => freeVariables
+            .get(variable, List(KeyPath)())
+            .reduce((body, keyPath) =>
+                KeyPath.updateJust((node, remaining) =>
+                    is (Node.CallExpression, node) ?
+                        t.branch(node) :
+                        KeyPath.update(t.branching, remaining, node),
+                    -1, keyPath, body),
+                body),
             body);
-    const dfExpression = Δ(fExpression, { body: uBody });
-    console.log(generate(dfExpression));
+
+    // We don't want this function to have the same name as the original,
+    // because then it would shadow a reference to the original function.
+    const dfExpression = Δ(fExpression, { id: null, body: uBody });
     const transformed = require("./differentiate")(dfExpression);
 
-	const instantiate = new Function("δ", `return ${generate(transformed)}`);
+	const instantiate = new Function(
+	   ["δ", ...(id ? [id.name] : [])],
+	   `return ${generate(transformed)}`);
 
-    return instantiate(δ);
+    return instantiate(δ, f);
 }
 /*
 function _(keyPath, body)
