@@ -45,13 +45,7 @@ module.exports = function differentiate(f, bs)
     const uBody = variables
         .reduce((body, variable) => freeVariables
             .get(variable, List(KeyPath)())
-            .reduce((body, keyPath) =>
-                KeyPath.updateJust((node, remaining) =>
-                    is (Node.CallExpression, node) ?
-                        t.branch(node) :
-                        KeyPath.update(t.branching, remaining, node),
-                    -1, keyPath, body),
-                body),
+            .reduce(derivate, body),
             body);
 
     // We don't want this function to have the same name as the original,
@@ -64,6 +58,73 @@ module.exports = function differentiate(f, bs)
 	   `return ${generate(transformed)}`);
 
     return instantiate(δ, f);
+}
+
+
+const derivate = (function ()
+{
+    const insertBranchOrBranching = (node, keyPath) =>
+        KeyPath.updateJust((node, remaining) =>
+            is (Node.CallExpression, node) ?
+                t.branch(node) :
+                KeyPath.update(t.branching, remaining, node),
+            -1, keyPath, node);
+    const isCallOrApply = name => name === "call" || name === "apply";
+    const isDotCallOrApply = (node, remaining) =>
+        is (Node.CallExpression, node) &&
+        remaining.key === "callee" &&
+        is (Node.StaticMemberExpression, node.callee) &&
+        remaining.child.key === "object" &&
+        isCallOrApply(node.callee.property.name);
+
+    return function derivate(body, keyPath)
+    {
+        return keyPath.length < 2 ?
+            insertBranchOrBranching(body, keyPath) :
+            KeyPath.updateJust((node, remaining) =>
+                isDotCallOrApply(node, remaining) ?
+                    t.branch(node) :
+                    insertBranchOrBranching(node, remaining),
+                    -2, keyPath, body);
+    }
+})();
+
+/*
+function derivate(body, keyPath)
+{
+    return KeyPath.updateJust((node, remaining) =>
+        isDotCallOrApply(node, remaining) ?
+            t.branch(node) :
+            KeyPath.updateJust((node, remaining) =>
+                is (Node.CallExpression, node) ?
+                    t.branch(node) :
+                    KeyPath.update(t.branching, remaining, node),
+                -1, remaining, node),
+            -2, remaining, body);
+}
+
+function derivate
+
+CallExpression
+|
+callee: StaticMemberExpression
+|
+object: 
+f.call(blah)
+
+function isDotCallOrApply(node, remaining)
+{
+    if (!is (Node.CallExpression, node) ||
+        remaining.child !== "callee")
+        return false;
+
+    if (!is (Node.StaticMemberExpression, node.callee) ||
+        remaining.child.child === "object")
+        return false;
+
+    const method = node.callee.property.name;
+
+    return method === "call" || method === "apply";   
 }
 /*
 function _(keyPath, body)

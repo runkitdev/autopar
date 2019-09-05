@@ -1,9 +1,22 @@
 const { precomputed } = require("./parallelize");
+//const { List } = require("@algebraic/collections");
+
 const dMapToList = δ(mapToList, [0]);
 
 precomputed (mapToList, [0], dMapToList);
 
 const dMap = parallel function (df, thisArg)
+{
+    const array = this;
+    const count = array.length;
+    const mappedList = mapToList(branching df, array, thisArg, List, 0, count);
+
+    return List.toArray(mappedList, count);
+}
+
+precomputed (Array.prototype.map, [0], dMap);
+/*
+const dListMap = parallel function (df, thisArg)
 {
     const array = this;
     const count = array.length;
@@ -14,9 +27,7 @@ const dMap = parallel function (df, thisArg)
     const mappedList = mapToList(branching dfThised, array, thisArg, List, 0, count);
 
     return List.toArray(mappedList, count);
-}
-
-precomputed (Array.prototype.map, [0], dMap);
+}*/
 
 // function map(f, array)
 // {
@@ -30,7 +41,7 @@ function mapToList(f, array, thisArg, List, index, count)
     return  index === count ?
             false :
             new List(
-                f(array[index], index, array),
+                f.call(thisArg, array[index], index, array),
                 mapToList(f, array, thisArg, List, index + 1, count));
 }
 
