@@ -9,8 +9,6 @@ const Task = require("@parallel-branch/task");
 
 const parallelize = (function ()
 {
-    const compute = (f, bs) => fail("Not implemented for " + f);
-
     return function parallelize(f, bs)
     {
         const cache =
@@ -19,7 +17,7 @@ const parallelize = (function ()
         const entry = []
         const key = toCacheKey(bs);
 
-        return cache[key] || (cache[key] = compute(f, bs));
+        return cache[key] || (cache[key] = require("./parallel")(f, bs));
     }    
 })();
 

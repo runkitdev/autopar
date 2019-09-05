@@ -19,7 +19,7 @@ const aggregate = failures => Task.Failure.Aggregate({ name:"d", failures });
 
 module.exports = function (...args)
 {
-	return require("./parallel")(...args);
+	return parallelize(...args);
 }
 
 module.exports.success = success;
@@ -145,15 +145,12 @@ module.exports.operators =
         (branchingLeft, fRight) =>
             depend(left => success(left && fRight()), [branchingLeft, []]),
 
-        (fLeft, branchingRight) =>
-            (left => left ? branchingRight() : success(left))(fLeft()),
+        (fLeft, branchingRight) => { console.log("HERE"); return fLeft() && branchingRight() },
 
-        (branchingLeft, branchingRight) =>
-            depend(left => left ? branchingRight() : success(left),
-                [branchingLeft, []]) )
+        (branchingLeft, branchingRight) => { console.log("HERE 2"); return branchingLeft() && branchingRight() })
 }
 
-require("./map");
+require("./map-iterable");
 
 /*
 module.exports = δ;
