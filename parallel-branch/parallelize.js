@@ -5,11 +5,11 @@ const { fNamed } = require("@algebraic/type/declaration");
 const fail = require("@algebraic/type/fail");
 const CacheSymbol = Symbol("parallel-branch:parallelize-cache");
 const toCacheKey = bs => JSON.stringify(bs);
-const Task = require("@parallel-branch/task");
+
 
 const parallelize = (function ()
 {
-    return function parallelize(f, bs)
+    return function parallelize(δ, f, bs)
     {
         const cache =
             f[CacheSymbol] ||
@@ -17,23 +17,13 @@ const parallelize = (function ()
         const entry = []
         const key = toCacheKey(bs);
 
-        return cache[key] || (cache[key] = require("./parallel")(f, bs));
+        return cache[key] || (cache[key] = require("./differentiate")(δ, f, bs));
     }    
 })();
 
 module.exports = parallelize;
 
 module.exports.parallelize = parallelize;
-
-module.exports.apply = (signature, bs, args) =>
-{
-    if (signature.length === 1)
-        return parallelize(signature[0], bs)(...args);
-
-    const [object, property] = signature;
-
-    return parallelize(object[property], bs).apply(object, args);
-}
 
 function precomputed(f, bs, bf)
 {

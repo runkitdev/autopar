@@ -7,6 +7,8 @@ const throw_it = x => Promise.reject(x);
 const delay = timeout => new Promise(resolve => setTimeout(timeout, resolve));
 
 log_and_val(transform(`
+const { List, Set, OrderedSet, Stack, Seq } = require("@algebraic/collections");
+const {any} = require("@algebraic/type");
 function id(x)
 {
     return x;

@@ -2,7 +2,7 @@
   "name": "parallel-branch",
   "version": "1.0.0-alpha.3",
   "description": "Automatic Concurrency through Asynchronous Derivatives",
-  "main": "index.js",
+  "main": "δ.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -4,11 +4,12 @@ const Statement = require("@parallel-branch/task/statement");
 
 const { parallelize, operator, precomputed } = require("./parallelize");
 
-
-module.exports = function (...args)
+const δ = function δ(f, bs)
 {
-	return parallelize(...args);
+	return parallelize(δ, f, bs);
 }
+
+module.exports = δ;
 
 module.exports.define = function (name, entrypoints, ...serialized)
 {
@@ -24,9 +25,19 @@ module.exports.call = function (definition, thisArg, initialBindings)
 	return Task.Called({ definition, scope });
 }
 
+module.exports.apply = (signature, bs, args) =>
+{
+    if (signature.length === 1)
+        return δ(signature[0], bs)(...args);
+
+    const [object, property] = signature;
+
+    return δ(object[property], bs).apply(object, args);
+}
+
 module.exports.tryCatch = (function ()
 {
-	const differentiate = require("./differentiate");
+	const transform = require("./transform");
 	const parse = require("@algebraic/ast/parse");
 	const generate = node => require("@babel/generator").default(node).code;
 
@@ -36,13 +47,11 @@ module.exports.tryCatch = (function ()
 
 		return succeeded ? value : branch(handler(value));
 	};
-	const transformed = differentiate(parse.expression(tryCatch + ""));
+	const transformed = transform(parse.expression(tryCatch + ""));
 	const generateTryCatch = new Function("δ", `return ${generate(transformed)}`);
 
-	return generateTryCatch(module.exports);
+	return generateTryCatch(δ);
 })();
-
-module.exports.apply = parallelize.apply;
 
 module.exports.operators =
 {

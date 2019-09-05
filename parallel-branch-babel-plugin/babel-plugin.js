@@ -1,4 +1,4 @@
-const differentiate = require("parallel-branch/differentiate");
+const transform = require("parallel-branch/transform");
 const fromBabel = require("@algebraic/ast/from-babel");
 const toBabel = require("@algebraic/ast/to-babel");
 const insertDeclaration = Symbol("insertDeclaration");
@@ -49,13 +49,13 @@ function FunctionExit(path, state)
     if (functionNode.parallel)
     {
         const algebraic = fromBabel(functionNode);
-        const parallel = differentiate(algebraic);
+        const transformed = transform(algebraic);
 
         // Even though we took extra care to make sure that algebraic/ast is
         // backwards-compatible with Babel, replaceWith wants to do silly
         // things like *mutate* the node we just handed it. So let's just give
         // it a plain object.
-        const babelNode = toBabel(parallel);
+        const babelNode = toBabel(transformed);
 
         if (functionNode.type === "FunctionDeclaration")
         {

@@ -20,7 +20,7 @@ module.exports = map(
 {
     TryStatement(statement)
     {
-        const fromFunction = require("./differentiate");
+        const fromFunction = require("./transform");
         const { block, handler } = statement;
         const fBlock = tArrowFunctionWrap(block);
         const fHandler = handler && Node.ArrowFunctionExpression(
@@ -70,7 +70,7 @@ module.exports = map(
 
 function toMaybeBranching(argument)
 {
-    const fromFunction = require("./differentiate");
+    const fromFunction = require("./transform");
 
     return  branches(argument) ?
             tBranching(fromFunction(tArrowFunctionWrap(argument))) :
