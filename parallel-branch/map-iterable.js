@@ -1,11 +1,8 @@
 const δ = require("./δ");
 const { of, any } = require("@algebraic/type");
-const { List } = require("@algebraic/collections");
+const { List, Set, OrderedSet, Seq, Stack } = require("@algebraic/collections");
 const { precomputed } = require("./parallelize");
 const CastSymbol = Symbol("@parallel-branch/iterable-cast");
-
-Array[CastSymbol] = array => Array.from(fromList(array));
-of(List(any)())[CastSymbol] = array => List(any)(fromList(array));
 
 function map(f, thisArg)
 {
@@ -15,7 +12,8 @@ function map(f, thisArg)
     return map.cast(this, map.iterator(iterator, this, f, thisArg, 0));
 }
 
-map.cast = (self, array) => of(self)[CastSymbol](array);
+map.cast = (self, list) =>
+    (of(self)[CastSymbol] || self[CastSymbol])(fromList(list));
 
 map.iterator = function mapIterator(iterator, iterable, f, thisArg, index)
 {
@@ -36,8 +34,14 @@ function *fromList(list)
     }
 }
 
+Array[CastSymbol] = iterator => Array.from(iterator);
 precomputed(Array.prototype.map, [0], δ(map, [0]));
-precomputed(of(List(any)()).prototype.map, [0], δ(map, [0]));
+
+[List, Set, OrderedSet, Seq, Stack]
+    .map(type => type.base)
+    .map(base =>
+        (base.prototype[CastSymbol] = iterator => base(iterator), base))
+    .map(base => precomputed(base.prototype.map, [0], δ(map, [0])));
 
 /*
 map.iterator = function mapIterator(iterator, iterable, f, thisArg, output)
