@@ -11,6 +11,7 @@ const { List, Map, Set } = require("@algebraic/collections");
 const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
 const valueToExpression = require("@algebraic/ast/value-to-expression");
+const generate = node => require("@babel/generator").default(node).code;
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
@@ -128,6 +129,14 @@ function fromFunction(functionNode)
         tBlock([useStrict, definitionDeclaration, tReturn(trueFunction)]) });
 
     return Node.CallExpression({ callee:fSetup, arguments:[] });
+}
+
+fromFunction.function = function (f)
+{
+    const transformed = fromFunction(parse.expression(f + ""));
+    const instantiate = new Function("δ", `return ${generate(transformed)}`);
+
+    return instantiate(require("./δ"));
 }
 
 function getFunctionBindingNames({ id, params })
