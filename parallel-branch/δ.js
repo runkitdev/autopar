@@ -48,6 +48,9 @@ function ternary(test, consequent, alternate)
     return test ? consequent() : alternate();
 }
 
+// Due to how we allow branch no_parallel(), ?: can actually trivially be
+// represented as the branching form of itself in all cases. We need to be
+// careful if we ever decide that Task.Called is itself wrapped though.
 precomputed(ternary, [1], ternary);
 precomputed(ternary, [2], ternary);
 precomputed(ternary, [1, 2], ternary);
