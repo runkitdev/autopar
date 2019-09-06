@@ -7,23 +7,23 @@ const { parallelize, operator, precomputed } = require("./parallelize");
 
 const δ = function δ(f, bs)
 {
-	return parallelize(δ, f, bs);
+    return parallelize(δ, f, bs);
 }
 
 module.exports = δ;
 
 module.exports.define = function (name, entrypoints, ...serialized)
 {
-	const statements = serialized.map(Statement.deserialize);
+    const statements = serialized.map(Statement.deserialize);
 
-	return Task.Definition({ name, entrypoints, statements });
+    return Task.Definition({ name, entrypoints, statements });
 }
 
 module.exports.call = function (definition, thisArg, initialBindings)
 {
-	const scope = Scope.from(thisArg, initialBindings);
+    const scope = Scope.from(thisArg, initialBindings);
 
-	return Task.Called({ definition, scope });
+    return Task.Called({ definition, scope });
 }
 
 module.exports.apply = (signature, bs, args) =>
@@ -38,49 +38,35 @@ module.exports.apply = (signature, bs, args) =>
 
 module.exports.tryCatch = transform.function(function (block, handler)
 {
-	const [succeeded, value] = branch(wrapped(block()));
+    const [succeeded, value] = branch(wrapped(block()));
 
-	return succeeded ? value : branch(handler(value));
+    return succeeded ? value : branch(handler(value));
 });
+
+function ternary(test, consequent, alternate)
+{
+    return test ? consequent() : alternate();
+}
+
+precomputed(ternary, [1], ternary);
+precomputed(ternary, [2], ternary);
+precomputed(ternary, [1, 2], ternary);
 
 module.exports.operators =
 {
-    "?:": operator `?:` (
-        (test, consequent, alternate) =>
-            test ? consequent() : alternate(),
+    "?:": ternary,
+    "||": function (lhs, rhs)
+    {
+        const left = lhs();
 
-        (test, branchingConsequent, alternate) =>
-            test ? branchingConsequent() : alternate(),
+        return left ? left : rhs();
+    },
+    "&&": function (lhs, rhs)
+    {
+        const left = lhs();
 
-        (test, consequent, branchingAlternate) =>
-            test ? consequent() : branchingAlternate(),
-
-        (test, branchingConsequent, branchingAlternate) =>
-            test ? branchingConsequent() : branchingAlternate() ),
-
-    "||": operator `||` (
-        (fLeft, fRight) => fLeft() || fRight(),
-
-//        (branchingLeft, fRight) =>
-//            depend(left => success(left || fRight()), [branchingLeft, []]),
-
-        (fLeft, branchingRight) => fLeft() || branchingRight(),
-
-//        (branchingLeft, branchingRight) =>
-//            depend(left => left ? success(left) : branchingRight(),
-//                [branchingLeft, []]) ),
-	),
-
-    "&&": operator `&&` (
-        (fLeft, fRight) => fLeft() && fRight(),
-
-//        (branchingLeft, fRight) =>
-//            depend(left => success(left && fRight()), [branchingLeft, []]),
-
-        (fLeft, branchingRight) => fLeft() && branchingRight(),
-
-//        (branchingLeft, branchingRight) => { console.log("HERE 2"); return branchingLeft() && branchingRight() })
-	)
+        return !left ? left : rhs();
+    }
 }
 
 require("./map-iterable");
