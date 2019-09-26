@@ -110,9 +110,9 @@ Task.Continuation.update = function update(isolate, continuation, unblocked)
             const [address, restUnblocked] = DenseIntSet.first(unblocked);
             const { statements } = continuation.definition;
             const statement = statements[address];
-            const [uIsolate, uContinuation, dependents] =
+            const [uIsolate, uContinuation, newlyUnblocked] =
                 perform(isolate, continuation, statement);
-            const uUnblocked = DenseIntSet.union(restUnblocked, dependents);
+            const uUnblocked = DenseIntSet.union(restUnblocked, newlyUnblocked);
 
             return [uIsolate, uContinuation, uUnblocked];
         }, [isolate, continuation, unblocked]);
