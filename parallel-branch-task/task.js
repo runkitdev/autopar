@@ -61,6 +61,11 @@ const BranchQueue           =   data `BranchQueue` (
 // const ContinuationMap = Map(ContentAddress, Task.Continuation);
 // const InvocationMap = OrderedMap(ContentAddress, Task.Invocation);
 
+const QueuedBranch = data `QueuedBranch` (
+    invocation              =>  Invocation,
+                                // Why not make this a DenseIntSet instead?
+    callsites               =>  List(Statement) );
+
 Task.Continuation           =   data `Task.Continuation` (
 
     EID                     =>  number,
@@ -77,17 +82,15 @@ Task.Continuation           =   data `Task.Continuation` (
                                         .map(child => child.references)
                                         .reduce(DenseIntSet.union,
                                             callsites.EIDs)],
-    
+
     ([running])             =>  [boolean, callsites => callsites.size > 0],
 
     errors                  =>  zeroed(List(any)),
-    result                  =>  [any, void(0)]
+    result                  =>  [any, void(0)],
 
-//    queued                  =>  [InvocationMap, InvocationMap()],
-
-//    nextQueueID             =>  [number, 0],
-//    queued                  =>  zeroed(OrderedMap(QueueKey, List(QueueItem))),
- );
+    queuedBranches          =>  zeroed(OrderedMap(any, List(QueuedBranch))),
+    nextQueuedBranchID      =>  [number, 0]
+);
 
 Task.Continuation.start = function (isolate, { definition, scope }, EID)
 {
@@ -181,10 +184,14 @@ function branch(isolate, continuation, statement, invocation)
     // Check if the isolate could support another task.
     if (!isolate.hasVacancy)
     {
-        const key = memoizable && contentAddress;
-        const uQueued =
-            BranchQueue.push(continuation.queued, invocation, statement, key);
-        const uContinuation = Δ(continuation, { queued: uQueued });
+        const key = memoizable ? contentAddress : nextQueuedBranchID;
+        const nextQueuedBranchID =
+            continuation.nextQueuedBranchID + memoizable ? 1 : 0;
+        const queuedBranches = continuation.queuedBranches
+            .update(key, List(QueuedBranch)(),
+                queuedBranches => queuedBranches.push(statement));
+        const uContinuation =
+            Δ(continuation, { queuedBranches, nextQueuedBranchID });
 
         return [isolate, uContinuation, DenseIntSet.Empty];
     }
