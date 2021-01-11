@@ -66,6 +66,9 @@ const QueuedBranch = data `QueuedBranch` (
                                 // Why not make this a DenseIntSet instead?
     callsites               =>  List(Statement) );
 
+// Do we really need a queue? Or do we actually need to just
+// store unblocked... branches and concat those when asked to update next.
+
 Task.Continuation           =   data `Task.Continuation` (
 
     EID                     =>  number,
@@ -88,8 +91,9 @@ Task.Continuation           =   data `Task.Continuation` (
     errors                  =>  zeroed(List(any)),
     result                  =>  [any, void(0)],
 
-    queuedBranches          =>  zeroed(OrderedMap(any, List(QueuedBranch))),
-    nextQueuedBranchID      =>  [number, 0]
+    queuedBranchStatements  =>  List(number)
+//    queuedBranches          =>  zeroed(OrderedMap(any, List(QueuedBranch))),
+//    nextQueuedBranchID      =>  [number, 0]
 );
 
 Task.Continuation.start = function (isolate, { definition, scope }, EID)
@@ -104,6 +108,11 @@ Task.Continuation.start = function (isolate, { definition, scope }, EID)
 // proceed
 Task.Continuation.update = function update(isolate, continuation, unblocked)
 {
+    if (isolate.hasVacancy)
+    {
+        
+    }
+
     const [uIsolate, uContinuation] = until(
         ([,continuation, unblocked]) =>
             continuation.errors.size > 0 ||
@@ -184,7 +193,12 @@ function branch(isolate, continuation, statement, invocation)
     // Check if the isolate could support another task.
     if (!isolate.hasVacancy)
     {
-        const key = memoizable ? contentAddress : nextQueuedBranchID;
+        const uQueuedBranchAddresses =
+            continuation.queuedBranchAddresses.push(statement.address);
+        const uContinuation = Δ(continuation,
+            { queuedBranchAddresses: uQueuedBranchAddresses });
+
+/*        const key = memoizable ? contentAddress : nextQueuedBranchID;
         const nextQueuedBranchID =
             continuation.nextQueuedBranchID + memoizable ? 1 : 0;
         const queuedBranches = continuation.queuedBranches
@@ -192,21 +206,21 @@ function branch(isolate, continuation, statement, invocation)
                 queuedBranches => queuedBranches.push(statement));
         const uContinuation =
             Δ(continuation, { queuedBranches, nextQueuedBranchID });
-
+*/
         return [isolate, uContinuation, DenseIntSet.Empty];
     }
 
     // This means we can invoke.
-    const [isThenable, result] = invoke(invocation);
+    const [isTrueThenable, result] = invoke(invocation);
 
-    if (!isThenable && is (Task.Completed, result))
+    if (!isTrueThenable && is (Task.Completed, result))
         return [isolate, ...advance(continuation, statement, result)];
 
     const [uIsolate, EID] =
         Isolate.activate(isolate, memoizable && contentAddress);
     const uContinuation = reference(continuation, statement, EID);
 
-    if (isThenable)
+    if (isTrueThenable)
         return [Isolate.allot(uIsolate, result, EID),
             uContinuation,
             DenseIntSet.Empty];

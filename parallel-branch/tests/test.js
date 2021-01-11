@@ -1,87 +1,37 @@
-
-const plugin = require("@parallel-branch/babel-plugin");
+console.log("huh");
+const plugin = require("@parallel-branch/babel-plugin");console.log("whata..");
 const transform = require("@babel/core").transform;
 const log_and_val = x => (console.log(x), eval(x));
+const run = require("@parallel-branch/task/run");
 
 log_and_val(transform(`
-console.log(Object.keys(δ));
-module.exports = parallel function dependencies(properties)
+parallel function d()
 {
-    if (false)
-        return false;
-
-    const tarname = branch f();
-
-    if (branch exists(tarname))
-        return whatever;
-
-    return something;
-}
-
-module.exports = parallel function dependencies(properties)
-{
-    if (false)
-        return false;
-
-    const tarname = branch f();
-    return operators["?:"](
-        branch exists(tarname),
-        branching parallel(() => { return whatever }),
-        branching parallel(() => { return something }));
-}
-
-module.exports.exists = parallel (path => existsSync(path) && path);
-
-const u = async id => (await 0, id);
-
-const x = {
-    d: parallel function d()
+    try
     {
-        try
-        {
-            const x = branch p();
-        }
-        catch([...errors])
-        {
-            console.log("got: " +errors);
-        }
-    },
-    a: parallel function f(a)
-    {
-        return f(branching d, branching e);
-    },
-    y: parallel function f(a)
-    {
-        if (a < 1)
-            return 5;
-
-        const x = 10 + a;
-        const y = [1,2,3].map(branching u);
-        const z = true && branch u(300000);
-    
-        return x + y[0] + (z ? 2 : 2);
-    },
-    z: parallel function f()
-    {
-        const y = x.y;
-
-        return branch u(20) + branch x.y(10) + branch y(10) + branch x["y"](10);
-    },
-    p: parallel function p()
-    {
-        return (console.log("at least here"), true) && branch x.y(30);
+        const p = (x) => new Promise((_, reject) => setTimeout(() => { console.log("inside " + x); reject("Error " + x) }, 0));
+        const x = branch p(1) + branch p(2);
+        return x;
     }
-};
+    catch([...errors])
+    {
+        console.log("got: " +errors);
+        return 5;
+    }
+}
 
 (async function ()
 {
-//    console.log(x.a + "");
-//    console.log("hi" + await x.p());
-try {
-    console.log("hi" + await x.d()); }
-    catch (e) { console.log("---> " + e) }
+    try {
+    	console.log(await run(d()));
+        //console.log("hi" + await d());
+    }
+    catch (e)
+    {
+        console.log("---> " + e)
+    }
 })();
-`, { plugins: [plugin] }).code);
+`, { plugins: [plugin], /*concise: true,*/ compact:true, generatorOpts: { /*concise: true,*/ compact:true } }).code);
 
 /*
 log_and_val(transform(`

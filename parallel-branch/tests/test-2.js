@@ -20,7 +20,7 @@ parallel function m()
 }*/
 
 parallel function fib(x)
-{
+{//throw new Error("OH NO");
     if (x <= 1)
         return 1;
 
@@ -28,8 +28,9 @@ parallel function fib(x)
 }
 
 parallel function many_fib()
-{
+{try {
     return [0,1,2,3,4,5,6,7,8,9].map(branching fib);
+} catch([...errors]) { console.log("THE ERRORS WERE ", errors); return 8; }
 }
 
 parallel function recurse(m, x)
@@ -37,12 +38,36 @@ parallel function recurse(m, x)
     return (branch m(x) === 0) ? branch (() => "yes")() : (branch recurse(m, x - 1));
 }
 
+parallel function until_zero(x)
+{
+    return x === 0 || branch until_zero(x - 1);
+}
+
+parallel function is_zero(x)
+{
+    return x === 0;
+}
+
+parallel function until_zero_2(x)
+{
+    return branch is_zero(x) || branch until_zero(x - 1);
+}
+
+parallel function until_zero_3(x)
+{
+    return branch is_zero(x) || "ok";
+}
+
+
 (async function ()
 {
     try {
 //        console.log(await m());
 //        console.log(await recurse(id, 2));
-        console.log(await many_fib());
+//        console.log(await many_fib());
+        console.log(await until_zero(10));
+        console.log(await until_zero_2(10));
+        console.log(await until_zero_3(10));
     }
     catch (e) { console.log("GOT: ", e); }
 })();
