@@ -201,9 +201,9 @@ function toDependentData(nodes)
     // ["a", "const {a,b} = x;"] and ["b", "const {a,b} = x;"].
     //
     // We can have many binding names pointing to the same element, but we
-    // assume the opposite isn't possible since it is a syntax error to redclare
-    // a const, and we treat function declarations as consts in concurrent
-    // contexts.
+    // assume the opposite isn't possible since it is a syntax error to
+    // redeclare a const, and we treat function declarations as consts in
+    // concurrent contexts.
     const declarations = Map(string, ConcurrentNode)(
         flatMap(([node, names]) =>
             names.map(name => [name, node]).toArray(),
