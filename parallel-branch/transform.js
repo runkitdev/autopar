@@ -165,8 +165,20 @@ function toSerializedTaskNode(functionBindingNames, dependentData)
     const body = tBlock(bodyStatements);
     const presentFunctionBindingNames = functionBindingNames
         .filter(name => node.freeVariables.has(name))
-    const bindingNames =
-        [...dependencies.bindingNames, ...presentFunctionBindingNames];
+
+    // FIXME: Should these already be Sets so we don't have to do this to dedupe?
+    // The problem is that a could be both in bindingNames AND in
+    // presentFunctionBindingNames. This can happen either by:
+    //
+    // 1. The same name appearing as a function name *and* function parameter.
+    // 2. The same name appearing as a function name *and* internal declaration.
+    //
+    // The same name appearing as a function parameter and internal declaration is
+    // considered a syntax error (for const).
+    const bindingNames = Set(string)(dependencies.bindingsNames)
+        .concat(presentFunctionBindingNames)
+        .toArray();
+
     const params = bindingNames.length > 0 ?
         [tShorthandPattern(bindingNames)] :
         [];
