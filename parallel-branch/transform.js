@@ -1,5 +1,6 @@
 const flatMap = require("@climb/flat-map");
 const fromEntries = require("@climb/from-entries");
+const pipe = require("@climb/pipe");
 
 const { data, number, union, string, is, type, boolean } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
@@ -86,8 +87,6 @@ const toVariableDeclaration = (name, init) =>
         declarators: [Node.VariableDeclarator
             ({ id: Node.IdentifierPattern({ name }), init })]
     });
-
-const pipe = (...fs) => value => fs.reduce((value, f) => f(value), value);
 
 module.exports = fromFunction;
 
@@ -404,6 +403,8 @@ function fromCascadingIfStatements(statements)
     const alternateFunction =
         fromFunction(Node.FunctionExpression({ body: alternateBlock }));
 
+    // FIXME: should we use toMaybeBranching here?...
+    // I seem to recall that breaking things...
     const argument = Node.CallExpression(
     {
         // Should branch?...

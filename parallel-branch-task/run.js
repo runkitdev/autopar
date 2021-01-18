@@ -138,6 +138,7 @@ Isolate.allot = function (isolate, thenable, EID)
 
     // We Promise wrap because we can't be sure that then() won't do something
     // synchronously.
+    // FIXME: Check for === Promise.prototype.then to avoid needing to do this.
     const wrapped = Promise.resolve(thenable);
     const succeeded = isolate.settle(toSuccess, slot, EID);
     const failed = isolate.settle(toFailure, slot, EID);

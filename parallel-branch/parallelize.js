@@ -41,6 +41,8 @@ module.exports.precomputed = precomputed;
 function wrapped(name, bs, bf)
 {
     // UGH: WITHOUT THIS, bf.apply(this, args) gets passed global.
+    // This is because when you call bf() (instead of x.bf()), there is
+    // no this.
     "use strict";
 
     const bname = `[∂branching/${bs.map(b => `∂${b}`).join("")}](${name})`;
