@@ -88,7 +88,7 @@ class ParallelBranchParser extends superclass
         // One option would be to copy the contents of the function, and all of its
         // un-exported dependencies, but that would require us tracking it indefinitely.
         // Instead, we just modify the behavior of isContextual to check "parallel"
-        // it is asked to check "async". This is the only difference in the function.
+        // if it is asked to check "async". This is the only difference in the function.
         const hasIsContextual = Object.hasOwnProperty("isContextual");
         const trueIsContextual = this.isContextual;
         this.isContextual = word => trueIsContextual
@@ -102,7 +102,6 @@ class ParallelBranchParser extends superclass
 
         return result;
     }
-
 
     checkReservedWord(word, startLoc, ...rest)// checkKeywords, isBinding)
     {
@@ -131,19 +130,25 @@ class ParallelBranchParser extends superclass
             return super.parseMaybeUnary(...args);
         }
 
-        if (this.scope.inParallel() && this.isContextual("branch"))
-            return this.parseBranchExpression("branch");
+        // Don't bother doing anything special if we're not in a parallel scope.
+        if (!this.scope.inParallel())
+            return super.parseMaybeUnary(...args);
 
-        if (this.scope.inParallel() && this.isContextual("branching"))
-            return this.parseBranchExpression("branching");
-
-        return super.parseMaybeUnary(...args);
+        return  this.parseMaybeParallelExpression `branch` ||
+                this.parseMaybeParallelExpression `branching` ||
+                super.parseMaybeUnary(...args);
     }
 
-    parseBranchExpression(keyword)
+    parseMaybeParallelExpression([keyword])
     {
+        if (!this.isContextual(keyword))
+            return false;
+
         const node = this.startNode();
 
+        // FIXME: We should actually be able to allow this.
+        // It's not allowed for await or yield, so we'll just be lazy for
+        // now.
         if (this.state.inParameters)
             this.raise(
                 node.start,
@@ -154,7 +159,10 @@ class ParallelBranchParser extends superclass
         node.callee = this.createIdentifier(this.startNodeAtNode(node), keyword);
         node.arguments = [this.parseMaybeUnary()];
 
-        return this.finishNode(node, "CallExpression");
+        const capitalized = keyword.replace(/^[a-z]/, ch => ch.toUpperCase());
+        const NodeName = `${capitalized}Expression`;
+
+        return this.finishNode(node, NodeName);
     }
 });
 
