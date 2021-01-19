@@ -156,8 +156,7 @@ class ParallelBranchParser extends superclass
 
         this.next();
 
-        node.callee = this.createIdentifier(this.startNodeAtNode(node), keyword);
-        node.arguments = [this.parseMaybeUnary()];
+        node.argument = this.parseMaybeUnary();
 
         const capitalized = keyword.replace(/^[a-z]/, ch => ch.toUpperCase());
         const NodeName = `${capitalized}Expression`;
