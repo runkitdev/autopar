@@ -163,5 +163,36 @@ class ParallelBranchParser extends superclass
 
         return this.finishNode(node, NodeName);
     }
+
+    parseSubscript(...args)
+    {
+        const node = super.parseSubscript(...args);
+
+        return  t.isCallExpression(node) ||
+                t.isOptionalCallExpression(node) ?
+                toMaybeDeriveAndBranchExpression(t, node) :
+                node;
+    }
 });
+
+const isBranchingExpression = node => node.type === "BranchingExpression";
+const toMaybeDeriveAndBranchExpression = (t, expression) =>
+    !expression.arguments.some(isBranchingExpression) ?
+        expression :
+        {
+            type: "DeriveAndBranchExpression",
+            optional: t.isOptionalCallExpression(expression),
+            ds: expression
+                .arguments
+                .map((argument, index) =>
+                    isBranchingExpression(argument) && index)
+                .filter(index => index !== false),
+            callee: expression.callee,
+            arguments: expression
+                .arguments
+                .map(argument =>
+                    isBranchingExpression(argument) ?
+                        argument.argument :
+                        argument)
+        };
 
