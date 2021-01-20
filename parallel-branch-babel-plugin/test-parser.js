@@ -31,7 +31,7 @@ PrinterPrototype["BranchingExpression"] = function (node)
     this.endTerminatorless(terminatorState);
 }
 
-PrinterPrototype["DeriveAndBranchExpression"] = function (node, parent)
+PrinterPrototype["DeriveCallAndBranchExpression"] = function (node, parent)
 {
     const { optional, callee, arguments } = node;
     const ds = new Set(node.ds);

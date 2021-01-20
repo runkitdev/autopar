@@ -147,8 +147,7 @@ class ParallelBranchParser extends superclass
         const node = this.startNode();
 
         // FIXME: We should actually be able to allow this.
-        // It's not allowed for await or yield, so we'll just be lazy for
-        // now.
+        // It's not allowed for await or yield, so we'll just be lazy for now.
         if (this.state.inParameters)
             this.raise(
                 node.start,
@@ -170,17 +169,18 @@ class ParallelBranchParser extends superclass
 
         return  t.isCallExpression(node) ||
                 t.isOptionalCallExpression(node) ?
-                toMaybeDeriveAndBranchExpression(t, node) :
+                toMaybeDeriveCallAndBranchExpression(t, node) :
                 node;
     }
 });
 
 const isBranchingExpression = node => node.type === "BranchingExpression";
-const toMaybeDeriveAndBranchExpression = (t, expression) =>
+const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
     !expression.arguments.some(isBranchingExpression) ?
         expression :
         {
-            type: "DeriveAndBranchExpression",
+            ...expression, // This gets us SourceLocation, etc.
+            type: "DeriveCallAndBranchExpression",
             optional: t.isOptionalCallExpression(expression),
             ds: expression
                 .arguments
