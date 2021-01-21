@@ -189,33 +189,42 @@ const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
     !expression.arguments.some(isBranchingExpression) ?
         expression :
         {
-            ...expression,
+            type: "CallExpression",
             callee:
             {
-                type: "CallExpression",
+                type: "IntrinsicReference",
+                id: "branch"
+            },
+            arguments:
+            [{
+                ...expression,
                 callee:
                 {
-                    type: "IntrinsicReference",
-                    id: "δ.apply"
+                    type: "CallExpression",
+                    callee:
+                    {
+                        type: "IntrinsicReference",
+                        id: "δ.apply"
+                    },
+                    // We have to keep the optionalness...
+                    optional: t.isOptionalCallExpression(expression),
+                    arguments:
+                    [
+                        t.ArrayExpression(
+                            toSeparatedMemberExpression(t, expression.callee)),
+                        t.valueToNode(expression
+                            .arguments
+                            .map((argument, index) =>
+                                isBranchingExpression(argument) && index)
+                            .filter(index => index !== false))
+                    ]
                 },
-                // We have to keep the optionalness...
-                optional: t.isOptionalCallExpression(expression),
-                arguments:
-                [
-                    t.ArrayExpression(
-                        toSeparatedMemberExpression(t, expression.callee)),
-                    t.valueToNode(expression
-                        .arguments
-                        .map((argument, index) =>
-                            isBranchingExpression(argument) && index)
-                        .filter(index => index !== false))
-                ]
-            },
-            arguments: expression
-                .arguments
-                .map(argument =>
-                    isBranchingExpression(argument) ?
-                        argument.arguments[0] :
-                        argument)
+                arguments: expression
+                    .arguments
+                    .map(argument =>
+                        isBranchingExpression(argument) ?
+                            argument.arguments[0] :
+                            argument)
+            }]
         };
 

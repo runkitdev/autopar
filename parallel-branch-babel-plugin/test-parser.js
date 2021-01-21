@@ -1,7 +1,7 @@
 const plugin = require("@parallel-branch/babel-plugin");
 const { parse, transform } = require("@babel/core");
 const generate =
-    (({ default: generate }) => node => generate(node).code)
+    (({ default: generate }) => (...args) => generate(...args).code)
     (require("@babel/generator"));
 
 
@@ -47,29 +47,153 @@ PrinterPrototype["DeriveCallAndBranchExpression"] = function (node, parent)
                 argument)
     }, parent);
 }
-console.log(PrinterPrototype["Identifier"]+"");
+const isCallExpressionToIntrinsic = (node, name) =>
+    node.type === "CallExpression" &&
+    node.callee.type === "IntrinsicReference" &&
+    node.callee.id === name;
+/*
+ node.type === "IntrinsicReference";
+
+*/
+
+const isBranchExpression = node =>
+    node.type === "CallExpression" &&
+    node.callee.type === "IntrinsicReference" &&
+    node.callee.id === "branch";
+/*
+ isIntrinsicReference(node) && isIntrinsicReference.n
+
+
+
+    CALL(callee: BRANCH)
+     /
+    args
+    /
+    CALL(callee: [CALL(δ.apply)])
+*/
+
+const PrintCallExpression = PrinterPrototype["CallExpression"];
+
+PrinterPrototype["CallExpression"] = function (node, parent, ...rest)
+{
+    const fallback = () => PrintCallExpression.call(this, node, parent, ...rest);
+console.log(isCallExpressionToIntrinsic(node, "branch"));
+    if (!isCallExpressionToIntrinsic(node, "branch") ||
+        node.arguments.length !== 1)
+        return fallback();
+console.log("THIS FAR");
+    const argument = node.arguments[0];
+
+    if (argument.type !== "CallExpression" ||
+        !isCallExpressionToIntrinsic(argument.callee, "δ.apply"))
+        return this.BranchExpression({ argument: node.arguments[0] }, parent, ...rest);
+//        return fallback();
+
+    const δapplyCallExpression = argument.callee;
+    console.log(δapplyCallExpression.arguments);
+    const [receiverExpression, dsExpression] = δapplyCallExpression.arguments;
+
+    const [object, property] = receiverExpression.elements;
+    const ds = new Set(dsExpression
+        .elements
+        .map(literal => literal.value));
+
+    return this.print(
+    {
+        type: node.optional ? "OptionalCallExpression" : "CallExpression",
+        callee: object,
+        arguments: argument
+            .arguments
+            .map((argument, index) =>
+                ds.has(index) ?
+                    { type: "BranchingExpression", argument } :
+                    argument)
+    }, parent);
+    /*
+
+     ||
+        !(argument.callee
+    
+    
+        !isCallExpressionToIntrinsic(arguments[0], "δ.apply"))
+        return fallback();
+        
+        
+    const δapplyCallExpression = arguments[0];
+    
+
+    return this.print(
+    {
+        type: node.optional ? "OptionalCallExpression" : "CallExpression",
+        callee,
+        arguments: arguments
+            .map((argument, index) =>
+                ds.has(index) ?
+                    { type: "BranchingExpression", argument } :
+                    argument)
+    }, parent);
+    PrintCallExpression.apply(this.callee
+        )
+
+    return */
+}
+
 PrinterPrototype["IntrinsicReference"] = function (node)
 {
+    if (node.id === "branch")
+        return this.BranchExpression(node);
+
     this.exactSource(node.loc, () => {
         this.word(`%${node.id}%`);
     });
 }
 
-const f =  `parallel function a(x, y, z)
+const f =   `
+
+parallel function a3(x, y, z)
+{
+    return x(branching a);
+}
+
+function a2(x, y, z)
+{
+    return  b1 ? a.c(d, d) :
+            b1 ? a[c](d, d) :
+            b1 ? a["c"](d, d) :
+            b1 ? a[x](d, d) :
+            a.c.d(d, d);
+}
+
+parallel function a(x, y, z)
 {
     return  branch b1 ? branch a.c(branching d, branch d) :
             branch b1 ? branch a[c](branching d, branch d) :
             branch b1 ? branch a["c"](branching d, branch d) :
             branch b1 ? branch a[branch x](branching d, branch d) :
             branch a.c.d(branching d, branch d);
-}`;
+}
+
+typeof y;
+
+const y = -f(x);
+`;
 
 const result = parse(f, { plugins: [plugin] });
 
 console.log(result.program.body[0].body.body[0].argument);
-console.log(generate(result));
+console.log(generate(result, { compact: false, retainLines: true }));
 
 /*
+
+`function a(x, y, z)
+{
+    return  b1 ? a.c(d, d) :
+            b1 ? a[c](d, d) :
+            b1 ? a["c"](d, d) :
+            b1 ? a[x](d, d) :
+            a.c.d(d, d);
+}`
+
  `parallel function a(x, y, z)
 {
 
