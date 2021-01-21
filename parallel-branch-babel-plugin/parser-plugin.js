@@ -176,8 +176,16 @@ const isBranchingExpression = node =>
     node.type === "CallExpression" &&
     node.callee.type === "IntrinsicReference" &&
     node.callee.id === "branching";
+
+// FIXME: Need to handle optional version of this.
+const toSeparatedMemberExpression = (t, node) =>
+    node.type !== "MemberExpression" ?
+        [node] :
+        [node.object, node.computed ?
+            node.property :
+            t.valueToNode(node.property.name)];
+
 const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
-(console.log(expression.arguments),
     !expression.arguments.some(isBranchingExpression) ?
         expression :
         {
@@ -188,13 +196,14 @@ const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
                 callee:
                 {
                     type: "IntrinsicReference",
-                    id: "branch.derive.and.call"
+                    id: "δ.apply"
                 },
                 // We have to keep the optionalness...
                 optional: t.isOptionalCallExpression(expression),
                 arguments:
                 [
-                    expression.callee, // need to split this up
+                    t.ArrayExpression(
+                        toSeparatedMemberExpression(t, expression.callee)),
                     t.valueToNode(expression
                         .arguments
                         .map((argument, index) =>
@@ -208,5 +217,5 @@ const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
                     isBranchingExpression(argument) ?
                         argument.arguments[0] :
                         argument)
-        });
+        };
 

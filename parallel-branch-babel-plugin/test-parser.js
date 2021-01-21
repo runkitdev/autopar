@@ -47,10 +47,21 @@ PrinterPrototype["DeriveCallAndBranchExpression"] = function (node, parent)
                 argument)
     }, parent);
 }
+console.log(PrinterPrototype["Identifier"]+"");
+PrinterPrototype["IntrinsicReference"] = function (node)
+{
+    this.exactSource(node.loc, () => {
+        this.word(`%${node.id}%`);
+    });
+}
 
 const f =  `parallel function a(x, y, z)
 {
-    return branch c(branching d, branch d);
+    return  branch b1 ? branch a.c(branching d, branch d) :
+            branch b1 ? branch a[c](branching d, branch d) :
+            branch b1 ? branch a["c"](branching d, branch d) :
+            branch b1 ? branch a[branch x](branching d, branch d) :
+            branch a.c.d(branching d, branch d);
 }`;
 
 const result = parse(f, { plugins: [plugin] });
