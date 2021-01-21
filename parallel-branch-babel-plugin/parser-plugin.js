@@ -155,12 +155,10 @@ class ParallelBranchParser extends superclass
 
         this.next();
 
-        node.argument = this.parseMaybeUnary();
+        node.callee = { type: "IntrinsicReference", id: keyword };
+        node.arguments = [this.parseMaybeUnary()];
 
-        const capitalized = keyword.replace(/^[a-z]/, ch => ch.toUpperCase());
-        const NodeName = `${capitalized}Expression`;
-
-        return this.finishNode(node, NodeName);
+        return this.finishNode(node, "CallExpression");
     }
 
     parseSubscript(...args)
@@ -174,25 +172,41 @@ class ParallelBranchParser extends superclass
     }
 });
 
-const isBranchingExpression = node => node.type === "BranchingExpression";
+const isBranchingExpression = node =>
+    node.type === "CallExpression" &&
+    node.callee.type === "IntrinsicReference" &&
+    node.callee.id === "branching";
 const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
+(console.log(expression.arguments),
     !expression.arguments.some(isBranchingExpression) ?
         expression :
         {
-            ...expression, // This gets us SourceLocation, etc.
-            type: "DeriveCallAndBranchExpression",
-            optional: t.isOptionalCallExpression(expression),
-            ds: expression
-                .arguments
-                .map((argument, index) =>
-                    isBranchingExpression(argument) && index)
-                .filter(index => index !== false),
-            callee: expression.callee,
+            ...expression,
+            callee:
+            {
+                type: "CallExpression",
+                callee:
+                {
+                    type: "IntrinsicReference",
+                    id: "branch.derive.and.call"
+                },
+                // We have to keep the optionalness...
+                optional: t.isOptionalCallExpression(expression),
+                arguments:
+                [
+                    expression.callee, // need to split this up
+                    t.valueToNode(expression
+                        .arguments
+                        .map((argument, index) =>
+                            isBranchingExpression(argument) && index)
+                        .filter(index => index !== false))
+                ]
+            },
             arguments: expression
                 .arguments
                 .map(argument =>
                     isBranchingExpression(argument) ?
-                        argument.argument :
+                        argument.arguments[0] :
                         argument)
-        };
+        });
 
