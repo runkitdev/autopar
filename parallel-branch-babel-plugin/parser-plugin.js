@@ -1,4 +1,11 @@
 const parser = require("./babel-parser-plugin");
+const Intrinsics = require("parallel-branch/intrinsics");
+
+
+const IntrinsicKeywords = Object
+    .values(Intrinsics.KeywordAccessible)
+    .map(intrinsic => intrinsic.keyword);
+const toIntrinsicReference = intrinsic => ({ type: "IntrinsicReference", intrinsic });
 
 module.exports = parser `parallel-branch` (({ types: t }, superclass) =>
 
@@ -134,17 +141,23 @@ class ParallelBranchParser extends superclass
         if (!this.scope.inParallel())
             return super.parseMaybeUnary(...args);
 
-        return  this.parseMaybeParallelExpression `branch` ||
-                this.parseMaybeParallelExpression `branching` ||
+        return  this.parseMaybeIntrinsicCall() ||
                 super.parseMaybeUnary(...args);
     }
 
-    parseMaybeParallelExpression([keyword])
+    parseMaybeIntrinsicCall()
     {
-        if (!this.isContextual(keyword))
+        const intrinsic = Object
+            .values(Intrinsics.KeywordAccessible)
+            .find(({ keyword }) => this.isContextual(keyword));
+
+        if (!intrinsic)
             return false;
 
         const node = this.startNode();
+
+        // FIXME: predicate that can do if (whatever) -> this.state.inParameters.
+        // Or maybe do the predicate before the isContextual...
 
         // FIXME: We should actually be able to allow this.
         // It's not allowed for await or yield, so we'll just be lazy for now.
@@ -155,7 +168,7 @@ class ParallelBranchParser extends superclass
 
         this.next();
 
-        node.callee = { type: "IntrinsicReference", id: keyword };
+        node.callee = toIntrinsicReference(intrinsic);
         node.arguments = [this.parseMaybeUnary()];
 
         return this.finishNode(node, "CallExpression");
@@ -190,22 +203,14 @@ const toMaybeDeriveCallAndBranchExpression = (t, expression) =>
         expression :
         {
             type: "CallExpression",
-            callee:
-            {
-                type: "IntrinsicReference",
-                id: "branch"
-            },
+            callee: toIntrinsicReference(Intrinsics.Branch),
             arguments:
             [{
                 ...expression,
                 callee:
                 {
                     type: "CallExpression",
-                    callee:
-                    {
-                        type: "IntrinsicReference",
-                        id: "δ.apply"
-                    },
+                    callee: toIntrinsicReference(Intrinsics.Apply),
                     // We have to keep the optionalness...
                     optional: t.isOptionalCallExpression(expression),
                     arguments:

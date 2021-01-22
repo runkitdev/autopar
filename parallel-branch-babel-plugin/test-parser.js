@@ -1,3 +1,4 @@
+const Intrinsics = require("parallel-branch/intrinsics");
 const plugin = require("@parallel-branch/babel-plugin");
 const { parse, transform } = require("@babel/core");
 const generate =
@@ -47,19 +48,15 @@ PrinterPrototype["DeriveCallAndBranchExpression"] = function (node, parent)
                 argument)
     }, parent);
 }
-const isCallExpressionToIntrinsic = (node, name) =>
+const isCallExpressionToIntrinsic = (node, intrinsic) =>
     node.type === "CallExpression" &&
     node.callee.type === "IntrinsicReference" &&
-    node.callee.id === name;
+    node.callee.id === intrinsic.name;
 /*
  node.type === "IntrinsicReference";
 
 */
 
-const isBranchExpression = node =>
-    node.type === "CallExpression" &&
-    node.callee.type === "IntrinsicReference" &&
-    node.callee.id === "branch";
 /*
  isIntrinsicReference(node) && isIntrinsicReference.n
 
@@ -77,15 +74,15 @@ const PrintCallExpression = PrinterPrototype["CallExpression"];
 PrinterPrototype["CallExpression"] = function (node, parent, ...rest)
 {
     const fallback = () => PrintCallExpression.call(this, node, parent, ...rest);
-console.log(isCallExpressionToIntrinsic(node, "branch"));
-    if (!isCallExpressionToIntrinsic(node, "branch") ||
+
+    if (!isCallExpressionToIntrinsic(node, Intrinsics.Branch) ||
         node.arguments.length !== 1)
         return fallback();
 console.log("THIS FAR");
     const argument = node.arguments[0];
 
     if (argument.type !== "CallExpression" ||
-        !isCallExpressionToIntrinsic(argument.callee, "δ.apply"))
+        !isCallExpressionToIntrinsic(argument.callee, Intrinsics.Apply))
         return this.BranchExpression({ argument: node.arguments[0] }, parent, ...rest);
 //        return fallback();
 
@@ -140,11 +137,11 @@ console.log("THIS FAR");
 
 PrinterPrototype["IntrinsicReference"] = function (node)
 {
-    if (node.id === "branch")
+    if (node.intrinsic === Intrinsics.Branch)
         return this.BranchExpression(node);
-
+console.log(node);
     this.exactSource(node.loc, () => {
-        this.word(`%${node.id}%`);
+        this.word(`%${node.intrinsic.name}%`);
     });
 }
 
