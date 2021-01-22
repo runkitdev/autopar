@@ -2,7 +2,7 @@ const flatMap = require("@climb/flat-map");
 const fromEntries = require("@climb/from-entries");
 const pipe = require("@climb/pipe");
 
-const { data, number, union, string, is, type, boolean } = require("@algebraic/type");
+const { Δ, data, number, union, string, is, type, boolean } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
 const fromBabel = require("@algebraic/ast/from-babel");
@@ -13,6 +13,18 @@ const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
 const valueToExpression = require("@algebraic/ast/value-to-expression");
 const generate = node => require("@babel/generator").default(node).code;
+
+const Intrinsics = require("./intrinsics");
+const { NumericLiteral, CallExpression, IntrinsicReference, Intrinsic } = require("@algebraic/ast");
+
+const Reference =
+    (intrinsic => IntrinsicReference({ intrinsic }))
+    (Intrinsic({ name: "ε" }));
+const toReferenceCallExpression = value => CallExpression
+({
+    callee: Reference,
+    arguments: [NumericLiteral({ value })]
+});
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
@@ -99,6 +111,15 @@ function fromFunction(functionNode)
         fromCascadingIfStatements,
         mapShortCircuitingExpressions)(getBodyAsStatments(functionNode));
 
+console.log(normalizedStatements[0]);
+console.log("---+++");
+const [references, node] = unblock(List(Object)(), normalizedStatements[0]);
+console.log(references);
+console.log(node);
+
+
+//console.log("___", normalizedStatements.map(x=>unblock(List(Object)(), x)));
+
     const taskNodes = normalizedStatements.flatMap(toTaskNodes);
     const dependentData = toDependentData(taskNodes);
     const initiallyUnblocked = DenseIntSet.from(dependentData
@@ -129,6 +150,112 @@ function fromFunction(functionNode)
 
     return Node.CallExpression({ callee:fSetup, arguments:[] });
 }
+
+const isBranchCallExpression = node =>
+    is (CallExpression, node) &&
+    is (IntrinsicReference, node.callee) &&
+    node.callee.intrinsic === Intrinsics.Branch;
+
+
+Δ.performant = (receiver, key, value) =>
+    receiver[key] === value ? receiver :
+    Array.isArray(receiver) ? receiver.splice(key, 1, value) :
+    Δ(receiver, { [key]: value });
+const keys = node =>
+    Array.isArray(node) ?
+        Array.from(node, (_, i) => i) :
+        type.of(node).traversable;
+
+const unblock = (references, node) =>
+
+    !node ? [references, node] :
+
+    isBranchCallExpression(node) ?
+        (([uReferences, uArgument]) =>
+        [
+            uReferences.push(uArgument),
+            toReferenceCallExpression(uReferences.size)
+        ])(unblock(references, node.arguments[0])) :
+        
+    keys(node).reduce(([references, node], key) =>
+        ((child, [uReferences, uChild] = unblock(references, child)) =>
+            [uReferences, Δ.performant(node, key, uChild)])
+            (node[key]),
+        [references, node]);
+    
+/*
+    if (!node)
+        return [references, node];
+
+    if (isBranchCallExpression(node))
+    {
+        const [argument] = node.arguments;
+        const [uReferences, uArgument] = something(references, argument);
+        const uuReferences = uReferences.push(uArgument);
+        const uArgumentReference = toReferenceCallExpression(uReferences.size);
+
+        return [uuReferences, uArgumentReference];
+    }
+    
+        
+        
+
+        return ;
+    
+    
+    const keys = isArray(node) ?
+        Array.from(node, (, i) => i) :
+        type.of(node).traversable;
+
+    return keys.reduce(([references, node], key) =>
+        ((child, [uReferences, uChild] = something(references, child)) =>
+            [uReferences, Δ.performant(node, key, uChild)])
+            (node[key]));
+}
+
+            
+        
+        
+    const branchKeyPaths =
+        statement.freeVariables.get("branch", List(KeyPath)());
+    const branchingKeyPaths =
+        statement.freeVariables.get("branching", List(KeyPath)());
+
+    if (branchKeyPaths.size <= 0 && branchingKeyPaths.size <= 0)
+        return [statement];
+
+    // Branch must come first!
+    // This is the worst way to do this...
+    const firstBranchKeyPath = branchKeyPaths.reduce((longest, keyPath) =>
+        longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
+    const firstBranchingKeyPath = branchingKeyPaths.reduce((longest, keyPath) =>
+        longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
+
+    // -2 comes from the fact that x(branching y) actually represents a branch of
+    // the x call.
+    const branchIsLonger =
+        firstBranchKeyPath.length > firstBranchingKeyPath.length - 2;
+    const keyPath = branchIsLonger ? firstBranchKeyPath : firstBranchingKeyPath;
+    const [insertionPoint, newChild, ancestor, wrapped] = branchIsLonger ?
+        fromBranch(keyPath, statement) :
+        fromBranching(keyPath, statement);
+
+    if (is (Node.BlockVariableDeclaration, statement))
+    {
+        const [declarator] = statement.declarators;
+        const { id, init } = declarator;
+
+        if (init === ancestor && is (Node.IdentifierPattern, id))
+            return [BranchExpression({ name: id.name, expression: newChild, wrapped })];
+    }
+
+    const name = "MADE_UP_" + (global_num++);
+    const task = BranchExpression({ name, expression: newChild, wrapped });
+    const variable = Node.IdentifierExpression({ name });
+    const replaced = KeyPath.setJust(insertionPoint, keyPath, variable, statement);
+
+    return [task, ...toTaskNodes(replaced)];
+}*/
 
 fromFunction.function = function (f)
 {
@@ -315,7 +442,9 @@ function toArrayExpression(...elements)
 
 function fromBranch(keyPath, statement)
 {
-    const [ancestor, remainingKeyPath] = KeyPath.getJust(-1, keyPath, statement);
+    const [ancestor, remainingKeyPath] = KeyPath.getJust(0, keyPath, statement);
+    
+    console.log(ancestor);
     const targetCall = ancestor.arguments[0];
 
     const isWrapped = targetCall.callee.name === "wrapped";
