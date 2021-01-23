@@ -3,6 +3,7 @@ const fromEntries = require("@climb/from-entries");
 const pipe = require("@climb/pipe");
 
 const { Δ, data, number, union, string, is, type, boolean } = require("@algebraic/type");
+
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
 const fromBabel = require("@algebraic/ast/from-babel");
@@ -15,15 +16,15 @@ const valueToExpression = require("@algebraic/ast/value-to-expression");
 const generate = node => require("@babel/generator").default(node).code;
 
 const Intrinsics = require("./intrinsics");
-const { NumericLiteral, CallExpression, IntrinsicReference, Intrinsic } = require("@algebraic/ast");
+const { IntrinsicReference, Intrinsic } = require("@algebraic/ast");
 
 const Reference =
-    (intrinsic => IntrinsicReference({ intrinsic }))
-    (Intrinsic({ name: "ε" }));
-const toReferenceCallExpression = value => CallExpression
+    (intrinsic => Node.IntrinsicReference({ intrinsic }))
+    (Node.Intrinsic({ name: "ε" }));
+const toReferenceCallExpression = value => Node.CallExpression
 ({
     callee: Reference,
-    arguments: [NumericLiteral({ value })]
+    arguments: [Node.NumericLiteral({ value })]
 });
 
 const vernacular = name =>
@@ -110,10 +111,18 @@ function fromFunction(functionNode)
         separateVariableDeclarations,
         fromCascadingIfStatements,
         mapShortCircuitingExpressions)(getBodyAsStatments(functionNode));
+/*
+    const [references, unblockedStatements] = unblock(List(Node)(), normalizedStatements);
 
+    
+    liftBranchDeclarations(normalizedStatements)
+    
+    [branchDeclarations, ]
+    lift([references, branchDeclarations, ])
+*/
 console.log(normalizedStatements[0]);
 console.log("---+++");
-const [references, node] = unblock(List(Object)(), normalizedStatements[0]);
+const [references, node] = unblock(Map(string, Object)(), normalizedStatements[0]);
 console.log(references);
 console.log(node);
 
@@ -150,10 +159,37 @@ console.log(node);
 
     return Node.CallExpression({ callee:fSetup, arguments:[] });
 }
+/*
+data `ConcurrentStatement` (
+    statement       => Node.Statement,
+    declarations    => [DenseIntSet, DenseIntSet.Empty] )
+
+
+function debranch(references_?, name_Data, statement)
+{
+    if (isBranchCallExpression(node))
+    {
+        
+        
+        
+        return []
+    }
+    
+        (([uReferences, uArgument]) =>
+        [
+            uReferences.push(uArgument),
+            toReferenceCallExpression(uReferences.size)
+        ])(unblock(references, node.arguments[0])) :
+    
+    DependentStatement
+        -> statement
+        -> [dependency_data]
+        -> []
+}*/
 
 const isBranchCallExpression = node =>
-    is (CallExpression, node) &&
-    is (IntrinsicReference, node.callee) &&
+    is (Node.CallExpression, node) &&
+    is (Node.IntrinsicReference, node.callee) &&
     node.callee.intrinsic === Intrinsics.Branch;
 
 
@@ -165,18 +201,25 @@ const keys = node =>
     Array.isArray(node) ?
         Array.from(node, (_, i) => i) :
         type.of(node).traversable;
+const Δreference = (references, expression, key = generate(expression)) =>
+    references.has(key) ?
+        [references, references.get(key)] :
+        [
+            references.set(key, [references.size, expression]),
+            [references.size, expression]
+        ];
 
 const unblock = (references, node) =>
 
     !node ? [references, node] :
 
     isBranchCallExpression(node) ?
-        (([uReferences, uArgument]) =>
+        (([uReferences, [uReference]]) =>
         [
-            uReferences.push(uArgument),
-            toReferenceCallExpression(uReferences.size)
-        ])(unblock(references, node.arguments[0])) :
-        
+            uReferences,
+            toReferenceCallExpression(uReference)
+        ])(Δreference(...unblock(references, node.arguments[0]))) :
+
     keys(node).reduce(([references, node], key) =>
         ((child, [uReferences, uChild] = unblock(references, child)) =>
             [uReferences, Δ.performant(node, key, uChild)])
