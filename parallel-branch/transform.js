@@ -120,11 +120,20 @@ function fromFunction(functionNode)
     [branchDeclarations, ]
     lift([references, branchDeclarations, ])
 */
-console.log(normalizedStatements[0]);
+//console.log(normalizedStatements[0]);
 console.log("---+++");
+require("@babel/generator/lib/printer").default.prototype["IntrinsicReference"] =  function (node)
+{
+    this.exactSource(node.loc, () => {
+        this.word(`%${node.intrinsic.name}%`);
+    });
+}
 const [references, node] = unblock(Map(string, Object)(), normalizedStatements[0]);
 console.log(references);
-console.log(node);
+//console.log(node);
+console.log(node === normalizedStatements[0]);
+console.log(node.declarators[0]);
+console.log("---> " + generate(node) + "]");
 
 
 //console.log("___", normalizedStatements.map(x=>unblock(List(Object)(), x)));
@@ -194,9 +203,9 @@ const isBranchCallExpression = node =>
 
 
 Δ.performant = (receiver, key, value) =>
-    receiver[key] === value ? receiver :
-    Array.isArray(receiver) ? receiver.splice(key, 1, value) :
-    Δ(receiver, { [key]: value });
+    receiver[key] === value ? receiver :(console.log("NEW VALUE:",key,!Array.isArray(value)&&generate(value)),
+    Array.isArray(receiver) ? receiver.slice(0, key).concat(value, receiver.slice(key + 1)) :
+    Δ(receiver, { [key]: value }));
 const keys = node =>
     Array.isArray(node) ?
         Array.from(node, (_, i) => i) :
