@@ -188,7 +188,7 @@ class ParallelBranchParser extends superclass
 const isBranchingExpression = node =>
     node.type === "CallExpression" &&
     node.callee.type === "IntrinsicReference" &&
-    node.callee.id === "branching";
+    node.callee.intrinsic === Intrinsics.Branching;
 
 // FIXME: Need to handle optional version of this.
 const toSeparatedMemberExpression = (t, node) =>
