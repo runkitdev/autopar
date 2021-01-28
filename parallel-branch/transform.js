@@ -7,9 +7,10 @@ const { Δ, data, number, union, string, is, type, boolean } = require("@algebra
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
 const fromBabel = require("@algebraic/ast/from-babel");
+const toSource = require("@algebraic/ast/to-source");
 const partition = require("@climb/partition");
 const Node = require("@algebraic/ast/node");
-const { List, Map, Set } = require("@algebraic/collections");
+const { List, Map, Set, OrderedMap } = require("@algebraic/collections");
 const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
 const valueToExpression = require("@algebraic/ast/value-to-expression");
@@ -122,18 +123,20 @@ function fromFunction(functionNode)
 */
 //console.log(normalizedStatements[0]);
 console.log("---+++");
+/*
 require("@babel/generator/lib/printer").default.prototype["IntrinsicReference"] =  function (node)
 {
     this.exactSource(node.loc, () => {
         this.word(`%${node.intrinsic.name}%`);
     });
 }
-const [references, node] = unblock(Map(string, Object)(), normalizedStatements[0]);
+*/
+const [references, node] = unblock(OrderedMap(string, Object)(), normalizedStatements);
 console.log(references);
 //console.log(node);
-console.log(node === normalizedStatements[0]);
-console.log(node.declarators[0]);
-console.log("---> " + generate(node) + "]");
+console.log(node[0] === normalizedStatements[0]);
+console.log(node[0].declarators[0]);
+console.log("---> " + toSource({ type:"BlockStatement", body:node }) + "]");
 
 
 //console.log("___", normalizedStatements.map(x=>unblock(List(Object)(), x)));
@@ -203,14 +206,14 @@ const isBranchCallExpression = node =>
 
 
 Δ.performant = (receiver, key, value) =>
-    receiver[key] === value ? receiver :(console.log("NEW VALUE:",key,!Array.isArray(value)&&generate(value)),
+    receiver[key] === value ? receiver :(console.log("NEW VALUE:",key,!Array.isArray(value)&&toSource(value)),
     Array.isArray(receiver) ? receiver.slice(0, key).concat(value, receiver.slice(key + 1)) :
     Δ(receiver, { [key]: value }));
 const keys = node =>
     Array.isArray(node) ?
         Array.from(node, (_, i) => i) :
         type.of(node).traversable;
-const Δreference = (references, expression, key = generate(expression)) =>
+const Δreference = (references, expression, key = toSource(expression)) =>
     references.has(key) ?
         [references, references.get(key)] :
         [
