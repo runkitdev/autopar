@@ -13,9 +13,10 @@ const f =  `parallel function a(x, y, z)
 {
 //    const { a, b } =  f(branching x);
 //    const a = branch (c + y) + branch(c + z);//(branch (branch c()));
-    const a = branch c + branch d;
+    const a = branch c(branch e) + branch d;
+    const f = q.g(branching a);
 
-    return a;
+    return a + f;
 }`;
 
 const AST = transform(f, { plugins: [plugin], code: false }).ast;

@@ -2,7 +2,7 @@ const { isArray } = Array;
 const { Δ, type } = require("@algebraic/type");
 const keys = node => type.of(node).traversable;
 
-const mapAccum = (f, accum) =>
+const mapAccum = f =>
 {
     const trivial = (accum, node) =>
         !node ? [accum, node] :
@@ -24,7 +24,7 @@ const mapAccum = (f, accum) =>
             custom(accum, rest[0]);
 }
 
-const map = f => mapAccum(([_, node]) => [_, f(node)], 0);
+const map = f => node => mapAccum((_, node) => [_, f(node)])(0, node)[1];
 
 module.exports = map;
 

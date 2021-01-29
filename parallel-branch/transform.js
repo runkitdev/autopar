@@ -2,7 +2,7 @@ const flatMap = require("@climb/flat-map");
 const fromEntries = require("@climb/from-entries");
 const pipe = require("@climb/pipe");
 
-const { Δ, data, number, union, string, is, type, boolean } = require("@algebraic/type");
+const { Δ, data, number, union, string, is, type, boolean, or } = require("@algebraic/type");
 
 const fail = require("@algebraic/type/fail");
 const parse = require("@algebraic/ast/parse");
@@ -118,10 +118,25 @@ const debranch = map.accum((references, node, recurse) =>
             toReferenceCallExpression(uReference)
         ])(Δreference(...debranch(references, node.arguments[0]))));
 
-const toReferenceDeclaration = (value, expression) => Node.CallExpression
+const toReferenceDeclaration = ([value, expression]) => Node.CallExpression
 ({
     callee: Reference,
     arguments: [Node.NumericLiteral({ value }), expression]
+});
+
+
+const ReferenceSet = Set(or(number, string));
+
+const Scope = data `Scope` (
+    boundNames      => ReferenceSet,
+    freeVariables   => ReferenceSet );
+
+const toReferenceSet = m => (m ? ReferenceSet(m.keySeq()) : ReferenceSet());
+
+const toScope = statement => Scope(
+{
+    boundNames: toReferenceSet(statement.blockBindings),
+    freeVariables: toReferenceSet(statement.freeVariables)
 });
 
 function fromFunction(functionNode)
@@ -156,14 +171,17 @@ const statements = pipe(
     debranch(OrderedMap(string, Node)()),
     ([references, nodes]) => references
         .toArray()
-        .map(([index, expression]) => toReferenceDeclaration(index, expression))
+        .map(toReferenceDeclaration)
         .concat(nodes),
+    map(statement => (console.log("DOING " + statement),[statement, toScope(statement)])),
     x => x)(normalizedStatements);
+//console.log(statements[0], map(statement => [statement, toScope(statement)])+"", "++");
+
 console.log(statements);
 //console.log(node);
 //console.log(node[0] === normalizedStatements[0]);
 //console.log(node[0].declarators[0]);
-console.log("---> " + toSource({ type:"BlockStatement", body:statements }) + "]");
+console.log("---> " + toSource({ type:"BlockStatement", body:statements.map(([statement]) => statement) }) + "]");
 
 
 //console.log("___", normalizedStatements.map(x=>unblock(List(Object)(), x)));
