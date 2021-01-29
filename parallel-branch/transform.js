@@ -15,7 +15,7 @@ const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 const DenseIntSet = require("@algebraic/dense-int-set");
 const valueToExpression = require("@algebraic/ast/value-to-expression");
 const generate = node => require("@babel/generator").default(node).code;
-
+const map = require("./maps");
 const Intrinsics = require("./intrinsics");
 const { IntrinsicReference, Intrinsic } = require("@algebraic/ast");
 
@@ -54,6 +54,11 @@ const kDefinition = parse.expression("definition");
 
 const mapShortCircuitingExpressions =
     require("./map-short-circuiting-expressions");
+
+
+const δi = data `δi` (
+    statement       =>  Node.Statement,
+    dependencies    =>  Set(or(number, string)) )
 
 // at statement level?
 /*module.exports = map(
@@ -104,6 +109,15 @@ const toVariableDeclaration = (name, init) =>
 
 module.exports = fromFunction;
 
+const debranch = map.accum((references, node, recurse) =>
+    !isBranchCallExpression(node) ?
+        recurse(references, node) :
+        (([uReferences, [uReference]]) =>
+        [
+            uReferences,
+            toReferenceCallExpression(uReference)
+        ])(Δreference(...debranch(references, node.arguments[0]))));
+
 function fromFunction(functionNode)
 {
     const normalizedStatements = pipe(
@@ -131,8 +145,9 @@ require("@babel/generator/lib/printer").default.prototype["IntrinsicReference"] 
     });
 }
 */
-const [references, node] = unblock(OrderedMap(string, Object)(), normalizedStatements);
-console.log(references);
+console.log(debranch);
+const [references, node] = debranch(OrderedMap(string, Node)())(normalizedStatements);
+console.log(references, node);
 //console.log(node);
 console.log(node[0] === normalizedStatements[0]);
 console.log(node[0].declarators[0]);
@@ -221,7 +236,7 @@ const Δreference = (references, expression, key = toSource(expression)) =>
             [references.size, expression]
         ];
 
-const unblock = (references, node) =>
+/*const unblock = (references, node) =>
 
     !node ? [references, node] :
 
@@ -237,7 +252,30 @@ const unblock = (references, node) =>
             [uReferences, Δ.performant(node, key, uChild)])
             (node[key]),
         [references, node]);
-    
+
+map.accum = f => (node, accum) =>
+    (accum, node) =>
+        !node ? [accum, node] :
+        keys(node).reduce(([accum, node], key) =>
+        ((child, [uReferences, uChild] = unblock(references, child)) =>
+            [uReferences, Δ.performant(node, key, uChild)])
+            (node[key]),
+        [references, node]);
+
+    isBranchCallExpression(node) ?
+        (([uReferences, [uReference]]) =>
+        [
+            uReferences,
+            toReferenceCallExpression(uReference)
+        ])(Δreference(...unblock(references, node.arguments[0]))) :
+
+    keys(node).reduce(([references, node], key) =>
+        ((child, [uReferences, uChild] = unblock(references, child)) =>
+            [uReferences, Δ.performant(node, key, uChild)])
+            (node[key]),
+        [references, node]);
+}*/
+
 /*
     if (!node)
         return [references, node];

@@ -13,7 +13,7 @@ const f =  `parallel function a(x, y, z)
 {
 //    const { a, b } =  f(branching x);
 //    const a = branch (c + y) + branch(c + z);//(branch (branch c()));
-    const a = branch c;
+    const a = branch c + branch d;
 
     return a;
 }`;
