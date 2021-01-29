@@ -118,6 +118,12 @@ const debranch = map.accum((references, node, recurse) =>
             toReferenceCallExpression(uReference)
         ])(Δreference(...debranch(references, node.arguments[0]))));
 
+const toReferenceDeclaration = (value, expression) => Node.CallExpression
+({
+    callee: Reference,
+    arguments: [Node.NumericLiteral({ value }), expression]
+});
+
 function fromFunction(functionNode)
 {
     const normalizedStatements = pipe(
@@ -146,12 +152,18 @@ require("@babel/generator/lib/printer").default.prototype["IntrinsicReference"] 
 }
 */
 console.log(debranch);
-const [references, node] = debranch(OrderedMap(string, Node)())(normalizedStatements);
-console.log(references, node);
+const statements = pipe(
+    debranch(OrderedMap(string, Node)()),
+    ([references, nodes]) => references
+        .toArray()
+        .map(([index, expression]) => toReferenceDeclaration(index, expression))
+        .concat(nodes),
+    x => x)(normalizedStatements);
+console.log(statements);
 //console.log(node);
-console.log(node[0] === normalizedStatements[0]);
-console.log(node[0].declarators[0]);
-console.log("---> " + toSource({ type:"BlockStatement", body:node }) + "]");
+//console.log(node[0] === normalizedStatements[0]);
+//console.log(node[0].declarators[0]);
+console.log("---> " + toSource({ type:"BlockStatement", body:statements }) + "]");
 
 
 //console.log("___", normalizedStatements.map(x=>unblock(List(Object)(), x)));
