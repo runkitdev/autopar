@@ -128,19 +128,22 @@ const toReferenceDeclaration = ([value, expression]) => Node.CallExpression
 const ReferenceSet = Set(or(number, string));
 
 const Scope = data `Scope` (
-    boundNames      => ReferenceSet,
-    freeVariables   => ReferenceSet );
+    bound   => [ReferenceSet, ReferenceSet()],
+    free    => [ReferenceSet, ReferenceSet()] );
+
+Scope.bind = name => Scope({ bound: ReferenceSet([name]) });
+Scope.free = name => Scope({ free: ReferenceSet([name]) });
 
 const toReferenceSet = m => (m ? ReferenceSet(m.keySeq()) : ReferenceSet());
 
-const toScope = statement => Scope(
+const toScope = (statement, remove) => Scope(
 {
-    boundNames: toReferenceSet(statement.blockBindings),
-    freeVariables: toReferenceSet(statement.freeVariables)
+    bound: toReferenceSet(statement.blockBindings),
+    free: toReferenceSet(statement.freeVariables).subtract(remove.blockBindingNames.keySeq())
 });
 
 function fromFunction(functionNode)
-{
+{console.log(functionNode.blockBindingNames.keySeq().toArray());
     const normalizedStatements = pipe(
         hoistFunctionDeclarations,
         removeEmptyStatements,
@@ -173,7 +176,7 @@ const statements = pipe(
         .toArray()
         .map(toReferenceDeclaration)
         .concat(nodes),
-    map(statement => (console.log("DOING " + statement),[statement, toScope(statement)])),
+    map(statement => (console.log("DOING " + statement),[statement, toScope(statement, functionNode)])),
     x => x)(normalizedStatements);
 //console.log(statements[0], map(statement => [statement, toScope(statement)])+"", "++");
 
@@ -265,6 +268,17 @@ const Δreference = (references, expression, key = toSource(expression)) =>
             references.set(key, [references.size, expression]),
             [references.size, expression]
         ];
+
+
+
+// drop from not consts... have to be declared names
+/*function getBoundNames = (scope, ) =>
+{
+    is (IdentifierPattern, node) ? Scope.bind(node.name)
+    is (IdentifierExpression, node) ? Scope.free(node.name) :
+} */  
+    //is (VariableDeclarator, node) ? Scope.bind(node.name)
+
 
 /*const unblock = (references, node) =>
 
